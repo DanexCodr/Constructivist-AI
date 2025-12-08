@@ -13,29 +13,44 @@ Constructivist AI is a research implementation of a cognitive architecture that 
 ## Core Principles
 
 The architecture is based on constructivist learning theory, where:
+
 - Knowledge is actively constructed rather than passively received
+
 - Learning involves building and refining cognitive structures  
+
 - New learning builds upon and integrates with existing structures
+
 - The learning process itself can become more efficient over time
 
 ## Architecture Components
 
 ### Symbolic Foundation
+
 - **Symbol Manager**: Maintains canonical representations with alias resolution
+
 - **Context Tracking**: Records left/right neighbor frequencies for each symbol
 
 ### Pattern Learning  
+
 - **Pattern Processor**: Extracts abstract patterns from concrete sequences
+
 - **Unsupervised Clusterer**: Groups similar sequences for concept formation
+
 - **Optionality Detection**: Identifies optional elements in patterns
 
 ### Structural Analysis
+
 - **Structural Equivalence Detector**: Finds words that occupy equivalent structural positions
-- **Pattern Family Builder**: Groups patterns with shared structural vocabulary
+
+- **Pattern Family Builder**: Groups
+patterns with shared structural vocabulary
+
 - **Property Discovery**: Identifies pattern properties like commutativity
 
 ### Inference & Generation
+
 - **Relation Finder**: Discovers transitive and logical relationships
+
 - **Sequence Generator**: Produces valid sequences from learned patterns
 
 ## Key Capabilities
@@ -144,13 +159,17 @@ This work explores an alternative to both classical symbolic AI and modern stati
 Current limitations include:
 
 · Brittle matching (exact token matching required)
+
 · Limited to sequential, symbolic input
+
 · Early research prototype stage
 
 ## Planned extensions:
 
 · Probabilistic pattern matching
+
 · Extended property discovery (associativity, transitivity)
+
 · Natural language preprocessing interface
 
 ## Citation
