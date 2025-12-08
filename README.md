@@ -75,7 +75,7 @@ All learned patterns and inferences are explicitly represented and examinable.
 
 ```
 
-Inferential AI - Learn from equivalent sequences
+Constructivist AI - Learn from equivalent sequences
 Commands:[l]earn, [p]rocess, [i]nfer, [v]iew, [q]uit
 
 l
