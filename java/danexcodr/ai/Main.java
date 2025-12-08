@@ -9,7 +9,7 @@ import java.util.*;
 import java.util.LinkedHashMap;
 
 /**
- * Inferential AI - Learns logical patterns and relationships from sequences. This version uses a
+ * Constructivist AI - Learns logical patterns and relationships from sequences. This version uses a
  * unified learning command ([l]earn) that incorporates unsupervised "mental" clustering. All code
  * is compatible with Java 7.
  */
