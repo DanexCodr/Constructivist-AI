@@ -3,7 +3,7 @@
 **A cognitive architecture for self-improving pattern learning**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Java](https://img.shields.io/badge/Java-7%2B-blue)](https://openjdk.org/)
+[![Research Prototype](https://img.shields.io/badge/Research-Prototype-yellow)]()[![Java](https://img.shields.io/badge/Java-7%2B-blue)](https://openjdk.org/)
 [![Version](https://img.shields.io/badge/Version-0.1.0--alpha-orange)]()
 
 ## Overview
