@@ -14,9 +14,13 @@ public class RelationPattern extends AbstractPattern {
     
     private Set<List<String>> observedStructures = new HashSet<List<String>>();
     
-    private PatternFamily family = null;
+    // ONLY store family ID - NO object reference
+    private String familyId = null;
     
     private boolean isCommutative = false;
+    
+    // NO temporary reference for backward compatibility - REMOVED
+    // private PatternFamily familyRef = null;
     
     public RelationPattern(String id, String T1, String T2) {
         super(id);
@@ -47,11 +51,35 @@ public class RelationPattern extends AbstractPattern {
         updateTimestamp(); 
     }
     
+    // Set family by ID only - NO object reference stored
     public void setFamily(PatternFamily family) { 
-        this.family = family; 
+        this.familyId = (family != null) ? family.getId() : null;
         updateTimestamp();
     }
-    public PatternFamily getFamily() { return this.family; }
+    
+    // Set family by ID directly
+    public void setFamilyId(String familyId) {
+        this.familyId = familyId;
+        updateTimestamp();
+    }
+    
+    // Get family ID - IMPORTANT: Make sure this is public
+    public String getFamilyId() { return this.familyId; }
+    
+    // Get family by looking it up from current families
+    // REQUIRES passing the current families list - NO caching
+    public PatternFamily getFamily(List<PatternFamily> currentFamilies) {
+        if (familyId == null || currentFamilies == null) return null;
+        
+        for (PatternFamily family : currentFamilies) {
+            if (family.getId().equals(familyId)) {
+                return family;
+            }
+        }
+        return null;
+    }
+    
+    // NO parameterless getFamily() method - REMOVED to prevent stale references
     
     public void setCommutative(boolean commutative) { 
         this.isCommutative = commutative; 
