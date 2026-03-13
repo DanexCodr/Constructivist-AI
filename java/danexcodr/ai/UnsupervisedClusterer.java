@@ -6,25 +6,28 @@ import danexcodr.ai.core.Symbol;
 
 /**
  * Implements the "mental" unsupervised clustering logic with Short-Term Memory Persistence.
- * Now supports input normalization via SymbolManager.
  */
 public class UnsupervisedClusterer {
 
     private Main ai;
     private List<MemoryTrace> memoryTraces; 
+    private Map<String, MemoryTrace> signatureToTrace;
 
     public UnsupervisedClusterer(Main ai) {
         this.ai = ai;
         this.memoryTraces = new ArrayList<MemoryTrace>();
+        this.signatureToTrace = new HashMap<String, MemoryTrace>();
     }
 
     private static class MemoryTrace {
         List<List<String>> cluster;
         long createdAt;
+        String signature;
 
-        MemoryTrace(List<List<String>> cluster) {
+        MemoryTrace(List<List<String>> cluster, String signature) {
             this.cluster = cluster;
             this.createdAt = System.currentTimeMillis();
+            this.signature = signature;
         }
 
         double getSalience(SymbolManager symbolManager) {
@@ -32,7 +35,6 @@ public class UnsupervisedClusterer {
             Set<String> uniqueWords = new HashSet<String>();
             
             for (List<String> seq : cluster) {
-                // Use canonical forms for salience check
                 for(String w : seq) {
                     uniqueWords.add(symbolManager.getCanonical(w));
                 }
@@ -54,6 +56,7 @@ public class UnsupervisedClusterer {
 
     public void resetClusters() {
         this.memoryTraces.clear();
+        this.signatureToTrace.clear();
     }
 
     private static class ClusterSorter implements Comparable<ClusterSorter> {
@@ -88,56 +91,84 @@ public class UnsupervisedClusterer {
         }
     }
 
+    private String createSignature(List<String> sentence, SymbolManager symbolManager) {
+        List<String> canonical = new ArrayList<String>(sentence.size());
+        for (String word : sentence) {
+            canonical.add(symbolManager.getCanonical(word));
+        }
+        Collections.sort(canonical);
+        return canonical.toString();
+    }
+
     public void testAndAddSentence(List<String> newSentence, String originalLine) {
-        // 1. Ensure symbols exist (Pre-registers aliases if known)
+        // Ensure symbols exist
         for (String word : newSentence) {
             ai.getSymbolManager().ensureSymbolExists(word);
         }
         
-        // 2. Normalize the sentence for comparison
-        List<String> normalizedSentence = new ArrayList<String>();
-        for(String word : newSentence) {
-            normalizedSentence.add(ai.getSymbolManager().getCanonical(word));
-        }
+        String signature = createSignature(newSentence, ai.getSymbolManager());
         
-        Set<String> newSentenceSet = new HashSet<String>(normalizedSentence);
-
-        // 3. Loop through all existing MemoryTraces
-        for (MemoryTrace trace : memoryTraces) {
-            List<List<String>> cluster = trace.cluster;
+        if (signatureToTrace.containsKey(signature)) {
+            MemoryTrace existingTrace = signatureToTrace.get(signature);
             
-            for (List<String> existingSentence : cluster) {
-                // Normalize existing sentence for comparison
-                Set<String> existingSentenceSet = new HashSet<String>();
-                for(String w : existingSentence) {
-                    existingSentenceSet.add(ai.getSymbolManager().getCanonical(w));
-                }
-                
-                int difference = getWordDifference(newSentenceSet, existingSentenceSet);
-
-                if (difference < 2) {
-                    // Add the original raw sentence to preserve input fidelity, 
-                    // but clustering was based on normalized form.
-                    cluster.add(newSentence);
-                    trace.createdAt = System.currentTimeMillis();
-                    return; 
+            for (List<String> existingSeq : existingTrace.cluster) {
+                if (existingSeq.equals(newSentence)) {
+                    existingTrace.createdAt = System.currentTimeMillis();
+                    return;
                 }
             }
+            
+            existingTrace.cluster.add(newSentence);
+            existingTrace.createdAt = System.currentTimeMillis();
+            return;
+        }
+        
+        Set<String> newSentenceSet = new HashSet<String>();
+        for(String word : newSentence) {
+            newSentenceSet.add(ai.getSymbolManager().getCanonical(word));
+        }
+        
+        MemoryTrace bestMatch = null;
+        int bestDifference = Integer.MAX_VALUE;
+        
+        for (MemoryTrace trace : memoryTraces) {
+            if (trace.cluster.isEmpty()) continue;
+            
+            List<String> firstSentence = trace.cluster.get(0);
+            Set<String> existingSentenceSet = new HashSet<String>();
+            for(String w : firstSentence) {
+                existingSentenceSet.add(ai.getSymbolManager().getCanonical(w));
+            }
+            
+            int difference = getWordDifference(newSentenceSet, existingSentenceSet);
+            
+            if (difference < 2 && difference < bestDifference) {
+                bestDifference = difference;
+                bestMatch = trace;
+            }
+        }
+        
+        if (bestMatch != null) {
+            bestMatch.cluster.add(newSentence);
+            bestMatch.createdAt = System.currentTimeMillis();
+            signatureToTrace.put(signature, bestMatch);
+            return;
         }
 
         List<List<String>> newCluster = new ArrayList<List<String>>();
         newCluster.add(newSentence);
-        memoryTraces.add(new MemoryTrace(newCluster));
+        MemoryTrace newTrace = new MemoryTrace(newCluster, signature);
+        memoryTraces.add(newTrace);
+        signatureToTrace.put(signature, newTrace);
     }
     
     private int getWordDifference(Set<String> set1, Set<String> set2) {
-        Set<String> diff1 = new HashSet<String>(set1);
-        diff1.removeAll(set2);
+        if (set1 == set2) return 0;
         
-        Set<String> diff2 = new HashSet<String>(set2);
-        diff2.removeAll(set1);
-        
-        return diff1.size() + diff2.size();
+        int diff = 0;
+        for (String w : set1) if (!set2.contains(w)) diff++;
+        for (String w : set2) if (!set1.contains(w)) diff++;
+        return diff;
     }
 
     public void processClusters() {
@@ -150,9 +181,6 @@ public class UnsupervisedClusterer {
             if (trace.cluster.size() > 1) {
                 sortedMatureClusters.add(new ClusterSorter(trace.cluster, i));
             } else {
-                // NEW: Single-Shot Learning Trigger
-                // If a single sequence matches a known Commutative Pattern Family,
-                // we treat it as a mature concept because the commutativity implies variation.
                 List<String> singleSeq = trace.cluster.get(0);
                 if (ai.hasCommutativeCollapse(singleSeq)) {
                      System.out.println("   [System: Single-shot learning triggered by Commutative Family match]");
@@ -193,6 +221,12 @@ public class UnsupervisedClusterer {
         }
 
         this.memoryTraces = remainingTraces;
+        signatureToTrace.clear();
+        for (MemoryTrace trace : memoryTraces) {
+            if (trace.signature != null) {
+                signatureToTrace.put(trace.signature, trace);
+            }
+        }
         performGarbageCollection();
     }
 
@@ -210,6 +244,10 @@ public class UnsupervisedClusterer {
                 List<String> seq = trace.cluster.get(0);
                 String preview = (seq.size() > 3) ? seq.get(0) + "..." : seq.toString();
                 System.out.println("   [Memory] Fading weak trace: " + preview + " (Score: " + String.format("%.2f", salience) + ")");
+                
+                if (trace.signature != null) {
+                    signatureToTrace.remove(trace.signature);
+                }
                 it.remove(); 
             }
         }

@@ -203,7 +203,7 @@ public class StructuralEquivalenceDetector {
 
         Set<List<String>> currentPatternFamily = new HashSet<List<String>>();
         for (List<String> seq : equivalentSequences) {
-            List<String> abstractPattern = abstractSequence(seq, t1, t2); 
+            List<String> abstractPattern = SequenceTransformer.abstractSequence(seq, t1, t2); 
             currentPatternFamily.add(abstractPattern);
         }
         
@@ -215,7 +215,7 @@ public class StructuralEquivalenceDetector {
             if (haveSimilarStructuralSignature(currentStructuralSignature, existingStructuralSignature)) {
                 for (List<String> currentPattern : currentPatternFamily) {
                     
-                    List<String> flippedCurrent = flipTermPattern(currentPattern);
+                    List<String> flippedCurrent = SequenceTransformer.flipTermPattern(currentPattern);
                     boolean isCurrentCommutative = !currentPattern.equals(flippedCurrent) && currentPatternFamily.contains(flippedCurrent);
 
                     for (StructuralPattern existingPattern : familyEntry.getValue()) {
@@ -362,33 +362,5 @@ public class StructuralEquivalenceDetector {
                 foundEquivalents.add(new EquivalencePair(w1, w2));
             }
         }
-    }
-    
-    private List<String> abstractSequence(List<String> seq, String t1, String t2) {
-        List<String> abstracted = new ArrayList<String>();
-        for (String word : seq) {
-            if (word.equals(t1)) {
-                abstracted.add("[1]");
-            } else if (word.equals(t2)) {
-                abstracted.add("[2]");
-            } else {
-                abstracted.add(word);
-            }
-        }
-        return abstracted;
-    }
-    
-    private List<String> flipTermPattern(List<String> pattern) {
-        List<String> flipped = new ArrayList<String>();
-        for (String token : pattern) {
-            if (token.equals("[1]")) {
-                flipped.add("[2]");
-            } else if (token.equals("[2]")) {
-                flipped.add("[1]");
-            } else {
-                flipped.add(token);
-            }
-        }
-        return flipped;
     }
 }

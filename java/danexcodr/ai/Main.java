@@ -6,7 +6,6 @@ import danexcodr.ai.core.*;
 import danexcodr.ai.core.SymbolManager;
 import danexcodr.ai.pattern.*;
 import java.util.*;
-import java.util.LinkedHashMap;
 
 /**
  * Constructivist AI - Learns logical patterns and relationships from sequences. This version uses a
@@ -17,14 +16,11 @@ public class Main {
 
   // --- Core Data Structures ---
 
-  private Map<String, CompositePattern> compositionPatterns =
-      new LinkedHashMap<String, CompositePattern>();
+  private List<PatternFamily> cachedFamilies = null;
   private Map<String, Set<String>> structuralEquivalents =
       new HashMap<String, Set<String>>();
 
-  // --- Caching and State ---
-  private List<PatternFamily> cachedFamilies = null;
-  private List<Pattern> allPatterns = new ArrayList<Pattern>();
+  private List<Pattern> allPatterns = new ArrayList<Pattern>(); // Now only RelationPatterns
   private boolean familiesDirty = true;
 
   // --- Helper Modules ---
@@ -48,11 +44,11 @@ public class Main {
     return new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date(timestamp));
   }
 
-  public void printDiscoveredKnowledge() {
+public void printDiscoveredKnowledge() {
     System.out.println("\n=== Discovered Symbols (" + symbolManager.getSymbols().size() + ") ===");
 
     List<PatternFamily> families =
-        familyManager.getPatternFamilies(structuralEquivalents, familyBuilder, familiesDirty);
+        familyManager.getPatternFamilies(structuralEquivalents, familyBuilder);
 
     Set<String> dualWords = new HashSet<String>();
 
@@ -134,6 +130,7 @@ public class Main {
             return id1.compareTo(id2);
           }
         });
+    
     for (Pattern pattern : sortedPatterns) {
       if (pattern == null) continue;
       Timestamp timestamped = (Timestamp) pattern;
@@ -146,55 +143,25 @@ public class Main {
         System.out.print(
             " - Relation: " + rp.getT1() + (rp.isCommutative() ? " <-> " : " -> ") + rp.getT2());
         if (rp.isCommutative()) System.out.print(" [commutative]");
-        PatternFamily fam = rp.getFamily();
-        if (fam != null) System.out.print(" (Family: " + fam.getId() + ")");
-      } else if (pattern instanceof CompositePattern) {
-        CompositePattern cp = (CompositePattern) pattern;
         
-        List<String> structure = new ArrayList<String>(cp.getStructuralSlots());
-        Map<String, String> displayMapping = new HashMap<String, String>();
-        char varChar = 'X';
-        
-        // Determine mapping [1]->[X], [2]->[Y] in order of appearance
-        for (String slot : structure) {
-            if ((slot.equals("[1]") || slot.equals("[2]")) && !displayMapping.containsKey(slot)) {
-                displayMapping.put(slot, "[" + varChar + "]");
-                varChar++;
-            }
-        }
-        
-        // Create display list
-        List<String> displayStructure = new ArrayList<String>();
-        for (String slot : structure) {
-            if (displayMapping.containsKey(slot)) {
-                displayStructure.add(displayMapping.get(slot));
-            } else if (slot.startsWith("PF")) {
-                // BOX PF in raw pattern view
-                displayStructure.add("[" + slot + "]");
-            } else {
-                displayStructure.add(slot);
-            }
-        }
-
-        System.out.print(" - Structure: " + displayStructure);
-        
-        if (!cp.getVariableFillers().isEmpty()) {
-            List<String> sortedKeys = new ArrayList<String>(cp.getVariableFillers().keySet());
-            Collections.sort(sortedKeys);
-            
-            for (String placeholder : sortedKeys) {
-                String displayVar = displayMapping.get(placeholder);
-                if (displayVar != null) {
-                    System.out.println(); 
-                    System.out.print("    Where " + displayVar + " = " + cp.getVariableFillers().get(placeholder));
+        // Get family by ID
+        String familyId = rp.getFamilyId();
+        if (familyId != null) {
+            // Try to find the family in current families
+            PatternFamily fam = null;
+            for (PatternFamily family : families) {
+                if (family.getId().equals(familyId)) {
+                    fam = family;
+                    break;
                 }
             }
+            if (fam != null) {
+                System.out.print(" (Family: " + fam.getId() + ")");
+            } else {
+                System.out.print(" (Family ID: " + familyId + " - not found in current families)");
+            }
         }
-      } else if (pattern instanceof StructuralPattern) {
-        StructuralPattern sp = (StructuralPattern) pattern;
-        System.out.print(" - Structure: " + sp.getStructuralSlots());
-        if (sp.isCommutative()) System.out.print(" [commutative]");
-      } 
+      }
       System.out.println();
     }
 
@@ -219,7 +186,6 @@ public class Main {
         // 1. Print Aliases
         Map<String, Set<String>> reverseAliases = new TreeMap<String, Set<String>>(family.getAliases());
         for(Map.Entry<String, Set<String>> e : reverseAliases.entrySet()) {
-             // FIX 1: Removed extra brackets around e.getKey() because alias keys already have them (e.g., "[S0]")
              System.out.println(" " + e.getKey() + " | " + e.getValue());
         }
 
@@ -242,7 +208,6 @@ public class Main {
                 
                 // Substitute with Alias if applicable
                 if (family.getWordToAlias().containsKey(token)) {
-                    // FIX 2: Removed extra brackets around alias substitution
                     display = family.getWordToAlias().get(token);
                 } else if (token.startsWith("PF")) { 
                     // Box PF tokens purely for display
@@ -287,6 +252,25 @@ public class Main {
         System.out.println("    Total frequency: " + family.getFrequency()
             + " | Created: " + formatTimestamp(family.getCreatedAt())
             + " | Modified: " + formatTimestamp(family.getLastModifiedAt()));
+            
+        // Show which RelationPatterns belong to this family
+        List<RelationPattern> familyPatterns = new ArrayList<RelationPattern>();
+        for (Pattern pattern : allPatterns) {
+            if (pattern instanceof RelationPattern) {
+                RelationPattern rp = (RelationPattern) pattern;
+                if (family.getId().equals(rp.getFamilyId())) {
+                    familyPatterns.add(rp);
+                }
+            }
+        }
+        
+        if (!familyPatterns.isEmpty()) {
+            System.out.println("    Contains relations:");
+            for (RelationPattern rp : familyPatterns) {
+                System.out.println("      " + rp.getT1() + (rp.isCommutative() ? " <-> " : " -> ") + 
+                                 rp.getT2() + " (" + rp.getId() + ")");
+            }
+        }
       }
     }
 
@@ -325,11 +309,11 @@ public class Main {
     }
   }
 
-  public Main() {
+public Main() {
     this.symbolManager = new SymbolManager();
     
     this.optionalFinder = new OptionalFinder();
-    this.familyBuilder = null;
+    this.familyBuilder = new PatternFamilyBuilder(structuralEquivalents);
     this.familyManager = new PatternFamilyManager(allPatterns, cachedFamilies);
 
     this.bigramAnalyzer = new BigramAnalyzer(symbolManager);
@@ -342,7 +326,6 @@ public class Main {
             optionalFinder,
             bigramAnalyzer,
             structuralEquivalents,
-            compositionPatterns,
             allPatterns,
             familiesDirty);
     
@@ -410,22 +393,6 @@ public class Main {
                   + " ("
                   + rp.getId()
                   + ")");
-        } else if (pattern instanceof CompositePattern) {
-          CompositePattern cp = (CompositePattern) pattern;
-          System.out.println(
-              "   Matched composition pattern: "
-                  + cp.getCompositionSlots()
-                  + " ("
-                  + cp.getId()
-                  + ")");
-        } else if (pattern instanceof StructuralPattern) {
-          StructuralPattern sp = (StructuralPattern) pattern;
-          System.out.println(
-              "   Matched structural pattern: "
-                  + sp.getStructuralSlots()
-                  + " ("
-                  + sp.getId()
-                  + ")");
         } else {
           System.out.println("   Matched unknown pattern type: (" + pattern.getId() + ")");
         }
@@ -434,12 +401,22 @@ public class Main {
       }
     }
 
+    // CHANGED: Also check pattern families
+    List<PatternFamily> families = familyManager.getPatternFamilies(structuralEquivalents, familyBuilder);
+    for (PatternFamily family : families) {
+        if (family.matchesSequence(sequence)) {
+            family.incrementFrequency();
+            System.out.println("   Matched pattern family: " + family.getId());
+            matched = true;
+        }
+    }
+
     if (!matched) {
       System.out.println("   No known patterns matched this sequence.");
     }
   }
 
-  private void handleGeneration() {
+private void handleGeneration() {
     System.out.println("       Enter terms:");
     System.out.print("       1.  ");
     String term1 = scanner.nextLine().trim();
@@ -447,43 +424,51 @@ public class Main {
     String term2 = scanner.nextLine().trim();
 
     if (term1.isEmpty() || term2.isEmpty()) {
-      System.out.println("   Terms cannot be empty.");
-      return;
+        System.out.println("   Terms cannot be empty.");
+        return;
     }
 
     if (!term1.startsWith("PF")) symbolManager.ensureSymbolExists(term1);
     if (!term2.startsWith("PF")) symbolManager.ensureSymbolExists(term2);
 
-    List<List<String>> results = new Sequence(allPatterns).infer(term1, term2);
+    List<PatternFamily> families = familyManager.getPatternFamilies(
+        structuralEquivalents, familyBuilder);
+    
+    Sequence sequence = new Sequence(allPatterns, patternProcessor);
+    sequence.setCurrentFamilies(families);
+    sequence.setCurrentStructuralEquivalents(structuralEquivalents);
+    sequence.setFamilyManager(familyManager);
+    
+    List<List<String>> results = sequence.infer(term1, term2);
 
     if (results.isEmpty()) {
-      System.out.println("   No sequences could be generated.");
+        System.out.println("   No sequences could be generated.");
     } else {
-      System.out.println("   Generated " + results.size() + " unique sequences:");
-      Collections.sort(
-          results,
-          new Comparator<List<String>>() {
-            @Override
-            public int compare(List<String> o1, List<String> o2) {
-              return o1.toString().compareTo(o2.toString());
+        System.out.println("   Generated " + results.size() + " unique sequences:");
+        Collections.sort(
+            results,
+            new Comparator<List<String>>() {
+                @Override
+                public int compare(List<String> o1, List<String> o2) {
+                    return o1.toString().compareTo(o2.toString());
+                }
+            });
+        for (List<String> seq : results) {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < seq.size(); i++) {
+                sb.append(seq.get(i));
+                if (i < seq.size() - 1) {
+                    sb.append(" ");
+                }
             }
-          });
-      for (List<String> seq : results) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < seq.size(); i++) {
-          sb.append(seq.get(i));
-          if (i < seq.size() - 1) {
-            sb.append(" ");
-          }
+            System.out.println("     " + sb.toString());
         }
-        System.out.println("     " + sb.toString());
-      }
     }
-  }
+}
 
   public void run() {
     System.out.println("Constructivist AI - Learn from equivalent sequences");
-    System.out.println("Commands: [l]earn, [p]rocess, [i]nfer, [v]iew, [q]uit");
+    System.out.println("Commands: [l]earn, [p]rocess, [g]enerate, [v]iew, [q]uit");
 
     UnsupervisedClusterer clusterer = new UnsupervisedClusterer(this);
 
@@ -497,7 +482,7 @@ public class Main {
         handleUnifiedLearn(clusterer);
       } else if (command.equals("p") || command.equals("process")) {
         processNewSequence();
-      } else if (command.equals("i") || command.equals("infer")) {
+      } else if (command.equals("g") || command.equals("generate")) {
         handleGeneration();
       } else if (command.equals("v") || command.equals("view")) {
         printDiscoveredKnowledge();
@@ -511,14 +496,12 @@ public class Main {
 
   private void handleUnifiedLearn(UnsupervisedClusterer clusterer) {
     System.out.println("       Enter sentences (empty line to finish):");
-    int sentenceCount = 0;
     while (true) {
       System.out.print("       $   ");
       String line = scanner.nextLine().trim();
       if (line.isEmpty()) {
         break;
       }
-      sentenceCount++;
 
       String[] words = line.split("\\s+");
       List<String> sequence = new ArrayList<String>();

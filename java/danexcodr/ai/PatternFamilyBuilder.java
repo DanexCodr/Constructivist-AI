@@ -10,13 +10,17 @@ import danexcodr.ai.pattern.*;
 public class PatternFamilyBuilder {
     
     private Map<String, Set<String>> structuralEquivalents;
-    private List<Pattern> allPatterns;
+    private List<StructuralPattern> tempPatterns = new ArrayList<StructuralPattern>();
     
-    public PatternFamilyBuilder(Map<String, Set<String>> structuralEquivalents, List<Pattern> allPatterns) {
+    public PatternFamilyBuilder(Map<String, Set<String>> structuralEquivalents) {
         this.structuralEquivalents = structuralEquivalents;
-        this.allPatterns = new ArrayList<Pattern>(allPatterns);
     }
     
+    // Add temporary patterns during learning
+    public void addPattern(StructuralPattern pattern) {
+        tempPatterns.add(pattern);
+    }
+   
     private static class Key {
         String token;
         boolean isCommutative;
@@ -52,6 +56,7 @@ public class PatternFamilyBuilder {
         Map<Key, Set<Key>> relatedTokens = new HashMap<Key, Set<Key>>();
         Set<Key> allStructural = new HashSet<Key>();
 
+        // Build relations from structural equivalents
         for (Entry<String, Set<String>> entry : structuralEquivalents.entrySet()) {
             String W1 = entry.getKey();
             for (String W2 : entry.getValue()) {
@@ -60,32 +65,33 @@ public class PatternFamilyBuilder {
             }
         }
         
-        for (Pattern pattern : allPatterns) {
-            if (pattern instanceof StructuralPattern) {
-                StructuralPattern sp = (StructuralPattern) pattern;
-                boolean isCommutative = sp.isCommutative();
-                
-                List<Key> tokensInPattern = new ArrayList<Key>();
-                for (String token : sp.getStructuralSlots()) {
-                    // FIX: Ignore [C] and [X] so they are not treated as structural words
-                    if (token.equals("[1]") || token.equals("[2]") || 
-                        token.equals("[C]") || token.equals("[X]")) {
-                        continue;
-                    }
-
-                    Key k = new Key(token, isCommutative);
-                    tokensInPattern.add(k);
-                    allStructural.add(k);
-                    if (!relatedTokens.containsKey(k)) relatedTokens.put(k, new HashSet<Key>());
+        // Build relations from temporary patterns
+        for (StructuralPattern pattern : tempPatterns) {
+            boolean isCommutative = pattern.isCommutative();
+            List<String> structuralSlots = pattern.getStructuralSlots();
+            
+            if (structuralSlots == null) continue;
+            
+            List<Key> tokensInPattern = new ArrayList<Key>();
+            for (String token : structuralSlots) {
+                if (token.equals("[1]") || token.equals("[2]") || 
+                    token.equals("[C]") || token.equals("[X]") ||
+                    token.startsWith("PF")) {
+                    continue;
                 }
-                
-                for (int i = 0; i < tokensInPattern.size(); i++) {
-                    for (int j = i + 1; j < tokensInPattern.size(); j++) {
-                        Key W1 = tokensInPattern.get(i);
-                        Key W2 = tokensInPattern.get(j);
-                        relatedTokens.get(W1).add(W2);
-                        relatedTokens.get(W2).add(W1);
-                    }
+
+                Key k = new Key(token, isCommutative);
+                tokensInPattern.add(k);
+                allStructural.add(k);
+                if (!relatedTokens.containsKey(k)) relatedTokens.put(k, new HashSet<Key>());
+            }
+            
+            for (int i = 0; i < tokensInPattern.size(); i++) {
+                for (int j = i + 1; j < tokensInPattern.size(); j++) {
+                    Key W1 = tokensInPattern.get(i);
+                    Key W2 = tokensInPattern.get(j);
+                    relatedTokens.get(W1).add(W2);
+                    relatedTokens.get(W2).add(W1);
                 }
             }
         }
@@ -190,34 +196,33 @@ public class PatternFamilyBuilder {
             component.add(k.token);
         }
         
-        for (Pattern pattern : allPatterns) {
-            if (pattern instanceof StructuralPattern) {
-                StructuralPattern sp = (StructuralPattern) pattern;
+        for (StructuralPattern pattern : tempPatterns) {
+            boolean isCommutative = pattern.isCommutative();
+            List<String> patternSlots = pattern.getStructuralSlots();
+            
+            if (isCommutative != familyIsCommutative) {
+                continue;
+            }
+            
+            boolean belongs = true;
+            boolean hasFamily = false;
+            
+            for (String token : patternSlots) {
+                if (token.equals("[1]") || token.equals("[2]") || 
+                    token.equals("[C]") || token.equals("[X]") ||
+                    token.startsWith("PF") ||
+                    (token.startsWith("[") && token.endsWith("]") && 
+                     !token.equals("[1]") && !token.equals("[2]"))) continue;
                 
-                if (sp.isCommutative() != familyIsCommutative) {
-                    continue;
+                if (!component.contains(token)) {
+                    belongs = false;
+                    break;
                 }
-                
-                boolean belongs = true;
-                boolean hasFamily = false;
-                
-                List<String> patternSlots = sp.getStructuralSlots();
-
-                for (String token : patternSlots) {
-                    // FIX: Ignore [C] and [X] here as well
-                    if (token.equals("[1]") || token.equals("[2]") || 
-                        token.equals("[C]") || token.equals("[X]")) continue;
-                    
-                    if (!component.contains(token)) {
-                        belongs = false;
-                        break;
-                    }
-                    hasFamily = true;
-                }
-                
-                if (belongs && hasFamily) {
-                    family.addPattern(sp);
-                }
+                hasFamily = true;
+            }
+            
+            if (belongs && hasFamily) {
+                family.addAndMergePatterns(Collections.singletonList(pattern));
             }
         }
     }
