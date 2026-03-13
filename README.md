@@ -71,12 +71,18 @@ Patterns can nest to form hierarchies, enabling complex structures from simple c
 ### 4. Transparent Reasoning
 All learned patterns and inferences are explicitly represented and examinable.
 
+### 5. Grammar Correction
+The `[gr]ammar` command corrects structural-word usage (e.g., "a" vs. "an") in a sentence using only what the AI has been taught — no hardcoded rules. The system looks up the left-context frequencies of the following word to choose the best structural-equivalent article.
+
+### 6. Subword (Morpheme-Level) Learning
+The `[sw]ubword` command shows the affixes discovered so far. After each learning batch the system scans its symbol vocabulary and identifies any character sequence that appears as a shared prefix or suffix across two or more words (with a remaining stem of at least two characters). Those sequences are registered as known affixes and future inputs are automatically segmented at those boundaries — so the same clustering and pattern-learning machinery operates at the sub-word level without any hardcoded linguistic rules. Example: once the system has seen "canine" and "feline" it discovers `~ine` as a suffix and will represent both words as `can + ~ine` and `fel + ~ine` in subsequent learning.
+
 ## Example Learning Session
 
 ```
 
 Constructivist AI - Learn from equivalent sequences
-Commands:[l]earn, [p]rocess, [i]nfer, [v]iew, [q]uit
+Commands: [l]earn, [p]rocess, [g]enerate, [gr]ammar, [sw]ubword, [v]iew, [q]uit
 
 l
 Enter sentences (empty line to finish):
@@ -141,7 +147,7 @@ When a new sequence matches a known commutative pattern family, the system treat
 ### Compilation
 
 ```bash
-javac -d bin src/danexcodr/ai/**/*.java src/danexcodr/ai/core/*.java src/danexcodr/ai/pattern/*.java
+javac -d bin $(find java -name "*.java" | tr '\n' ' ')
 ```
 
 ### Execution
