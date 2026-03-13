@@ -467,20 +467,57 @@ private void handleGeneration() {
 }
 
   /**
-   * Corrects a/an article usage in a sentence: uses "an" before vowel-initial words
-   * and "a" before consonant-initial words.
+   * Corrects structural-word usage in a sentence using learned knowledge.
+   * For every word that has known structural equivalents (e.g. "a" ~ "an"),
+   * the word is replaced by whichever equivalent appears most often in the
+   * left-context of the following word according to the symbol table.
+   * No words are hardcoded: the correction is driven entirely by what the
+   * AI has been taught.
    */
   private String applyArticleCorrection(String sentence) {
     String[] words = sentence.split("\\s+");
     StringBuilder sb = new StringBuilder();
     for (int i = 0; i < words.length; i++) {
       String word = words[i];
-      String lower = word.toLowerCase();
-      if ((lower.equals("a") || lower.equals("an")) && i + 1 < words.length
-          && !words[i + 1].isEmpty()) {
-        char firstChar = Character.toLowerCase(words[i + 1].charAt(0));
-        word = "aeiou".indexOf(firstChar) >= 0 ? "an" : "a";
+      String canonical = symbolManager.getCanonical(word.toLowerCase());
+
+      // Only attempt correction when the word has known structural equivalents
+      // and there is a following word whose left-context we can consult.
+      if (i + 1 < words.length && structuralEquivalents.containsKey(canonical)) {
+        String nextCanonical = symbolManager.getCanonical(words[i + 1].toLowerCase());
+        Symbol nextSymbol = symbolManager.getSymbols().get(nextCanonical);
+
+        if (nextSymbol != null) {
+          // Build the full equivalence group: the word itself + all its equivalents.
+          Set<String> group = new HashSet<String>();
+          group.add(canonical);
+          Set<String> equivs = structuralEquivalents.get(canonical);
+          if (equivs != null) {
+            group.addAll(equivs);
+          }
+
+          // Pick the equivalent seen most often immediately before the next word.
+          String bestEquivalent = null;
+          int bestCount = 0;
+          for (String equiv : group) {
+            Integer count = nextSymbol.leftContext.get(equiv);
+            if (count != null && count > bestCount) {
+              bestCount = count;
+              bestEquivalent = equiv;
+            }
+          }
+          if (bestEquivalent != null) {
+            // Preserve sentence-initial capitalisation from the original word.
+            if (Character.isUpperCase(word.charAt(0))) {
+              word = Character.toUpperCase(bestEquivalent.charAt(0))
+                  + bestEquivalent.substring(1);
+            } else {
+              word = bestEquivalent;
+            }
+          }
+        }
       }
+
       if (i > 0) sb.append(" ");
       sb.append(word);
     }
