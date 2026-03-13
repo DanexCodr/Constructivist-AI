@@ -1,5 +1,7 @@
 package danexcodr.ai.core;
 
+import danexcodr.ai.util.MapUtils;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,13 +54,13 @@ public class SymbolManager {
             if (i > 0) {
                 String leftWord = sequence.get(i - 1);
                 String canonicalLeft = getCanonical(leftWord);
-                symbol.leftContext.put(canonicalLeft, incrementCount(symbol.leftContext, canonicalLeft));
+                symbol.leftContext.put(canonicalLeft, MapUtils.incrementCount(symbol.leftContext, canonicalLeft));
                 symbol.updateTimestamp(); 
             }
             if (i < sequence.size() - 1) {
                 String rightWord = sequence.get(i + 1);
                 String canonicalRight = getCanonical(rightWord);
-                symbol.rightContext.put(canonicalRight, incrementCount(symbol.rightContext, canonicalRight));
+                symbol.rightContext.put(canonicalRight, MapUtils.incrementCount(symbol.rightContext, canonicalRight));
                 symbol.updateTimestamp(); 
             }
         }
@@ -76,8 +78,8 @@ public class SymbolManager {
         baseSym.frequency += aliasSym.frequency;
         
         // Merge Contexts
-        mergeContextMap(baseSym.leftContext, aliasSym.leftContext);
-        mergeContextMap(baseSym.rightContext, aliasSym.rightContext);
+        MapUtils.mergeCountMap(baseSym.leftContext, aliasSym.leftContext);
+        MapUtils.mergeCountMap(baseSym.rightContext, aliasSym.rightContext);
         
         // Merge Relations
         baseSym.relations.addAll(aliasSym.relations);
@@ -88,19 +90,5 @@ public class SymbolManager {
         // Remove old symbol
         symbols.remove(aliasToken);
         baseSym.updateTimestamp();
-    }
-    
-    private void mergeContextMap(Map<String, Integer> target, Map<String, Integer> source) {
-        for (Map.Entry<String, Integer> entry : source.entrySet()) {
-            String key = entry.getKey();
-            Integer count = entry.getValue();
-            Integer current = target.get(key);
-            target.put(key, (current == null ? 0 : current) + count);
-        }
-    }
-
-    private Integer incrementCount(Map<String, Integer> map, String key) {
-        Integer count = map.get(key);
-        return (count == null) ? 1 : count + 1;
     }
 }

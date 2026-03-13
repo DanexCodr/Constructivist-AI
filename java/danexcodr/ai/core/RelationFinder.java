@@ -7,59 +7,40 @@ import java.util.*;
 public class RelationFinder {
 
     List<Pattern> allPatterns;
+    List<PatternFamily> currentFamilies;
+    Map<String, Set<String>> structuralEquivalents;
+    private PatternProcessor patternProcessor;
+    private Sequence sequence;
+    private PatternFamilyManager familyManager;
 
-    public RelationFinder(List<Pattern> allPatterns) {
+    public RelationFinder(List<Pattern> allPatterns, List<PatternFamily> currentFamilies, 
+                          Map<String, Set<String>> structuralEquivalents,
+                          PatternProcessor patternProcessor,
+                          Sequence sequence,
+                          PatternFamilyManager familyManager) {
         this.allPatterns = allPatterns;
+        this.currentFamilies = currentFamilies;
+        this.structuralEquivalents = structuralEquivalents;
+        this.patternProcessor = patternProcessor;
+        this.sequence = sequence;
+        this.familyManager = familyManager;
     }
 
     public Set<String> findConnectors(String word) {
         Set<String> connectors = new HashSet<String>();
-        for (Pattern p : allPatterns) {
-            if (!(p instanceof RelationPattern)) continue;
-            RelationPattern rp = (RelationPattern) p;
-
+        
+        List<RelationPattern> patterns = patternProcessor.findAllRelationPatternsWithTerm(word);
+        for (RelationPattern rp : patterns) {
             if (rp.getT1().equals(word)) {
                 connectors.add(rp.getT2());
-            }
-            if (rp.getT2().equals(word)) {
+            } else if (rp.getT2().equals(word)) {
                 connectors.add(rp.getT1());
             }
         }
+        
         return connectors;
     }
 
-    /**
-     * Standard 1-hop transitive lookup
-     */
-    public List<List<String>> findTransitiveRelations(String term1, String term2) {
-        Set<List<String>> transitiveResults = new LinkedHashSet<List<String>>();
-
-        Set<String> directConnections = findConnectors(term1);
-
-        for (String intermediate : directConnections) {
-            RelationPattern intermediateToTarget = PatternProcessor.findRelationPattern(intermediate, term2);
-            if (intermediateToTarget != null && intermediateToTarget.getFamily() != null) {
-                transitiveResults.addAll(Sequence.inferFromFamily(intermediateToTarget.getFamily(), term1, term2, false)
-                );
-            }
-
-            RelationPattern targetToIntermediate = PatternProcessor.findRelationPattern(term2, intermediate);
-            if (targetToIntermediate != null && targetToIntermediate.getFamily() != null) {
-                if (hasTransitiveEvidence(term1, intermediate, term2)) {
-                    transitiveResults.addAll(
-                            Sequence.inferFromFamily(targetToIntermediate.getFamily(), term1, term2, false)
-                    );
-                }
-            }
-        }
-
-        return new ArrayList<List<String>>(transitiveResults);
-    }
-
-/**
-     * NEW: Performs a Breadth-First Search to find a DEEP path between start and end terms
-     * through purely Logical pattern families.
-     */
     public List<String> findDeepPath(String start, String end) {
         if (start.equals(end)) return new ArrayList<String>();
 
@@ -79,17 +60,15 @@ public class RelationFinder {
                 return path;
             }
 
-            // Limit depth to prevent infinite loops or massive processing
             if (path.size() > TRAVERSE_DEPTH_LIMIT) continue;
 
-            // Get all connectors of the last node
             Set<String> neighbors = findConnectors(lastNode);
             for (String neighbor : neighbors) {
                 if (!visited.contains(neighbor)) {
-                    // CRITICAL: Only traverse if the relationship is LOGICAL
-                    RelationPattern relation = PatternProcessor.findRelationPattern(lastNode, neighbor);
+                    List<RelationPattern> relations = patternProcessor.findAllRelationPatterns(lastNode, neighbor);
+                    boolean relationFound = !relations.isEmpty();
                     
-                    if (relation != null && relation.getFamily() != null && relation.getFamily().isLogical()) {
+                    if (relationFound) {
                         List<String> newPath = new ArrayList<String>(path);
                         newPath.add(neighbor);
                         queue.add(newPath);
@@ -98,16 +77,7 @@ public class RelationFinder {
                 }
             }
         }
-        return null; // No path found
-    }
-
-    private boolean hasTransitiveEvidence(String term1, String intermediate, String term2) {
-        RelationPattern firstHop = PatternProcessor.findRelationPattern(term1, intermediate);
-        RelationPattern secondHop = PatternProcessor.findRelationPattern(intermediate, term2);
-
-        return firstHop != null && secondHop != null &&
-                firstHop.getFamily() != null && secondHop.getFamily() != null &&
-                firstHop.getFamily().isLogical() && secondHop.getFamily().isLogical();
+        return null;
     }
 
     public void validateInferences(String term1, String term2, List<List<String>> generatedSequences) {
@@ -118,18 +88,22 @@ public class RelationFinder {
         commonConnectors.retainAll(connectors2);
 
         for (String common : commonConnectors) {
-            RelationPattern t1ToCommon = PatternProcessor.findRelationPattern(term1, common);
-            RelationPattern t2ToCommon = PatternProcessor.findRelationPattern(term2, common);
+            List<RelationPattern> t1ToCommons = patternProcessor.findAllRelationPatterns(term1, common);
+            List<RelationPattern> t2ToCommons = patternProcessor.findAllRelationPatterns(term2, common);
 
-            if (t1ToCommon != null && t2ToCommon != null &&
-                    PatternProcessor.findRelationPattern(term1, term2) == null &&
-                    PatternProcessor.findRelationPattern(term2, term1) == null) {
-
-                Iterator<List<String>> iterator = generatedSequences.iterator();
-                while (iterator.hasNext()) {
-                    List<String> sequence = iterator.next();
-                    if (impliesCommutativeRelation(sequence, term1, term2)) {
-                        iterator.remove();
+            if (!t1ToCommons.isEmpty() && !t2ToCommons.isEmpty()) {
+                List<RelationPattern> directRelations = patternProcessor.findAllRelationPatterns(term1, term2);
+                if (directRelations.isEmpty()) {
+                    directRelations = patternProcessor.findAllRelationPatterns(term2, term1);
+                }
+                
+                if (directRelations.isEmpty()) {
+                    Iterator<List<String>> iterator = generatedSequences.iterator();
+                    while (iterator.hasNext()) {
+                        List<String> sequence = iterator.next();
+                        if (impliesCommutativeRelation(sequence, term1, term2)) {
+                            iterator.remove();
+                        }
                     }
                 }
             }

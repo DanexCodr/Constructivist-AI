@@ -15,12 +15,18 @@ public Set<String> getOptionals() {
     return optionals;
 }
 
+// ADD THIS METHOD:
+public void clearOptionals() {
+    optionals.clear();
+}
+
         public void preprocessAndIdentifyOptionals(List<List<String>> sequences) {
     
     if (sequences == null || sequences.size() < 2) {
         return;
     }
     
+    // Clear existing optionals at the start
     optionals.clear();
     
     List<List<String>> sortedSequences = new ArrayList<List<String>>(sequences);

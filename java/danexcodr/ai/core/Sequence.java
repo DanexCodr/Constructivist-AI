@@ -1,292 +1,347 @@
 package danexcodr.ai.core;
 
-import java.util.*;
 import danexcodr.ai.pattern.*;
-
+import danexcodr.ai.util.Combinatorics;
+import java.util.*;
 
 public class Sequence {
 
     private List<Pattern> allPatterns;
+    private List<PatternFamily> currentFamilies;
+    private Map<String, Set<String>> currentStructuralEquivalents;
+    private PatternProcessor patternProcessor;
+    private PatternFamilyManager familyManager;
 
-    public Sequence(List<Pattern> allPatterns) {
+    public Sequence(List<Pattern> allPatterns, PatternProcessor patternProcessor) {
         this.allPatterns = allPatterns;
+        this.patternProcessor = patternProcessor;
+        this.currentFamilies = null;
+        this.currentStructuralEquivalents = null;
+        this.familyManager = null;
+    }
+    
+    public void setCurrentFamilies(List<PatternFamily> families) {
+        this.currentFamilies = families;
+    }
+    
+    public void setCurrentStructuralEquivalents(Map<String, Set<String>> structuralEquivalents) {
+        this.currentStructuralEquivalents = structuralEquivalents;
+    }
+    
+    public void setFamilyManager(PatternFamilyManager familyManager) {
+        this.familyManager = familyManager;
+    }
+
+    private PatternFamily getFreshFamily(PatternFamily family) {
+        if (family == null || currentStructuralEquivalents == null) {
+            return family;
+        }
+        
+        family.updateAliases(currentStructuralEquivalents);
+        return family;
+    }
+
+    private PatternFamily getFamilyForRelation(RelationPattern relation) {
+        if (relation.getFamilyId() != null && familyManager != null) {
+            PatternFamily family = familyManager.getFamilyById(relation.getFamilyId());
+            return getFreshFamily(family);
+        }
+        return null;
     }
 
     public List<List<String>> infer(String T1, String T2) {
         Set<List<String>> shallowResults = new LinkedHashSet<List<String>>();
         boolean foundNonLogicalDirectRelation = false;
 
-        // ==========================================
-        // 1. DIRECT RELATIONS
-        // ==========================================
-        RelationPattern directRelation = PatternProcessor.findRelationPattern(T1, T2);
-        if (directRelation != null) {
-            if (directRelation.getFamily() != null) {
+        // 1. Check for direct relations
+        List<RelationPattern> directRelations = patternProcessor.findAllRelationPatterns(T1, T2);
+        for (RelationPattern directRelation : directRelations) {
+            PatternFamily family = getFamilyForRelation(directRelation);
+            
+            if (family != null) {
                 shallowResults.addAll(
-                        inferFromFamily(directRelation.getFamily(), T1, T2, directRelation.isCommutative())
+                        inferFromFamily(family, T1, T2, directRelation.isCommutative())
                 );
-                if (!directRelation.getFamily().isLogical()) {
-                    foundNonLogicalDirectRelation = true;
-                }
+                foundNonLogicalDirectRelation = true;
             }
         }
 
-        RelationPattern reverseRelation = PatternProcessor.findRelationPattern(T2, T1);
-        if (reverseRelation != null) {
-            if (reverseRelation.getFamily() != null) {
+        // 2. Check for reverse relations
+        List<RelationPattern> reverseRelations = patternProcessor.findAllRelationPatterns(T2, T1);
+        for (RelationPattern reverseRelation : reverseRelations) {
+            PatternFamily family = getFamilyForRelation(reverseRelation);
+            
+            if (family != null) {
                 shallowResults.addAll(
-                        inferFromFamily(reverseRelation.getFamily(), T2, T1, reverseRelation.isCommutative())
+                        inferFromFamily(family, T2, T1, reverseRelation.isCommutative())
                 );
-                if (!reverseRelation.getFamily().isLogical()) {
-                    foundNonLogicalDirectRelation = true;
-                }
+                foundNonLogicalDirectRelation = true;
             }
         }
 
         if (foundNonLogicalDirectRelation) {
             List<List<String>> results = new ArrayList<List<String>>(shallowResults);
-            RelationFinder relationFinder = new RelationFinder(allPatterns);
+            RelationFinder relationFinder = new RelationFinder(allPatterns, currentFamilies, 
+                                                              currentStructuralEquivalents, 
+                                                              patternProcessor, this, familyManager);
             relationFinder.validateInferences(T1, T2, results);
             return results;
         }
 
-        RelationFinder relationFinder = new RelationFinder(allPatterns);
+        // 3. Find common connectors with proper transitive inference
+        RelationFinder relationFinder = new RelationFinder(allPatterns, currentFamilies, 
+                                                          currentStructuralEquivalents, 
+                                                          patternProcessor, this, familyManager);
 
-        // ==========================================
-        // 2. SINGLE-HOP (TRANSITIVE)
-        // ==========================================
         Set<String> T1Connectors = relationFinder.findConnectors(T1);
         Set<String> T2Connectors = relationFinder.findConnectors(T2);
-
+        
         Set<String> commonConnectors = new HashSet<String>(T1Connectors);
         commonConnectors.retainAll(T2Connectors);
 
+        // RESTORED: Proper transitive inference logic from old version
         for (String commonConnector : commonConnectors) {
-            RelationPattern T1tC = PatternProcessor.findRelationPattern(T1, commonConnector);
-            if (T1tC == null) T1tC = PatternProcessor.findRelationPattern(commonConnector, T1);
-
-            RelationPattern CtT2 = PatternProcessor.findRelationPattern(commonConnector, T2);
-            if (CtT2 == null) CtT2 = PatternProcessor.findRelationPattern(T2, commonConnector);
-
-            if (T1tC != null && CtT2 != null) {
-                boolean T1L = (T1tC.getFamily() != null && T1tC.getFamily().isLogical());
-                boolean T2L = (CtT2.getFamily() != null && CtT2.getFamily().isLogical());
-
-                if(T1L || T2L) {
-                    PatternFamily familyToUse = null;
-                    boolean commutativity = false;
-                    String sourceRelation = "";
-
-                    // 1. If First Leg (T1 -> C) is Commutative, use First Leg's Family.
-                    // 2. If First Leg is Non-Commutative, use Second Leg's Family.
-                    
-                    if (T1tC.isCommutative()) {
-                         familyToUse = T1tC.getFamily();
-                         commutativity = T1tC.isCommutative();
-                         sourceRelation = T1 + "->" + commonConnector + " (First Leg Commutative)";
-                    } else {
-                         familyToUse = CtT2.getFamily();
-                         commutativity = CtT2.isCommutative();
-                         sourceRelation = commonConnector + "->" + T2 + " (First Leg Non-Commutative)";
+            // Get all possible first leg relations
+            List<RelationPattern> T1toCommon = patternProcessor.findAllRelationPatterns(T1, commonConnector);
+            List<RelationPattern> commonToT1 = patternProcessor.findAllRelationPatterns(commonConnector, T1);
+            List<RelationPattern> firstLegs = new ArrayList<RelationPattern>();
+            firstLegs.addAll(T1toCommon);
+            firstLegs.addAll(commonToT1);
+            
+            // Get all possible second leg relations  
+            List<RelationPattern> commonToT2 = patternProcessor.findAllRelationPatterns(commonConnector, T2);
+            List<RelationPattern> T2toCommon = patternProcessor.findAllRelationPatterns(T2, commonConnector);
+            List<RelationPattern> secondLegs = new ArrayList<RelationPattern>();
+            secondLegs.addAll(commonToT2);
+            secondLegs.addAll(T2toCommon);
+            
+            if (!firstLegs.isEmpty() && !secondLegs.isEmpty()) {
+                for (RelationPattern firstLeg : firstLegs) {
+                    for (RelationPattern secondLeg : secondLegs) {
+                        PatternFamily family1 = getFamilyForRelation(firstLeg);
+                        PatternFamily family2 = getFamilyForRelation(secondLeg);
+                        
+                        // FIXED: More permissive transitive logic from old version
+                        boolean canUseForTransitive = false;
+                        PatternFamily familyToUse = null;
+                        boolean commutativity = false;
+                        
+                        // Case 1: Both non-commutative (standard transitive)
+                        if (!firstLeg.isCommutative() && !secondLeg.isCommutative()) {
+                            canUseForTransitive = true;
+                            familyToUse = family1;
+                            commutativity = false;
+                        }
+                        // Case 2: Commutative middle with non-commutative ends
+                        else if (firstLeg.isCommutative() && !secondLeg.isCommutative()) {
+                            canUseForTransitive = true;
+                            familyToUse = family1;
+                            commutativity = firstLeg.isCommutative();
+                        }
+                        // Case 3: Non-commutative start with commutative end
+                        else if (!firstLeg.isCommutative() && secondLeg.isCommutative()) {
+                            canUseForTransitive = true;
+                            familyToUse = family2;
+                            commutativity = secondLeg.isCommutative();
+                        }
+                        // Case 4: Both commutative through same family
+                        else if (firstLeg.isCommutative() && secondLeg.isCommutative() &&
+                                 family1 != null && family2 != null && 
+                                 family1.getId().equals(family2.getId())) {
+                            canUseForTransitive = true;
+                            familyToUse = family1;
+                            commutativity = true;
+                        }
+                        // Case 5: Both non-commutative through SAME family
+                        else if (!firstLeg.isCommutative() && !secondLeg.isCommutative() &&
+                                 family1 != null && family2 != null && 
+                                 family1.getId().equals(family2.getId())) {
+                            canUseForTransitive = true;
+                            familyToUse = family1;
+                            commutativity = false;
+                        }
+                        
+                        if (canUseForTransitive && familyToUse != null) {
+                            shallowResults.addAll(inferFromFamily(familyToUse, T1, T2, commutativity));
+                        }
                     }
-                    shallowResults.addAll(inferFromFamily(familyToUse, T1, T2, commutativity));
                 }
             }
         }
 
-        // ==========================================
-        // 3. LOGICAL BRIDGES (The "is not" logic)
-        // ==========================================
+        // 4. RESTORED: Commutative Bridges (parent bridge detection from old version)
         Set<String> parents1 = new HashSet<String>();
         for (String conn : relationFinder.findConnectors(T1)) {
-            RelationPattern rp = PatternProcessor.findRelationPattern(T1, conn);
-            if (rp != null && rp.getT2().equals(conn) && !rp.isCommutative()) {
-                parents1.add(conn);
+            List<RelationPattern> rps = patternProcessor.findAllRelationPatterns(T1, conn);
+            for (RelationPattern rp : rps) {
+                if (rp.getT2().equals(conn) && !rp.isCommutative()) {
+                    parents1.add(conn);
+                }
             }
         }
 
         Set<String> parents2 = new HashSet<String>();
         for (String conn : relationFinder.findConnectors(T2)) {
-            RelationPattern rp = PatternProcessor.findRelationPattern(T2, conn);
-            if (rp != null && rp.getT2().equals(conn) && !rp.isCommutative()) {
-                parents2.add(conn);
+            List<RelationPattern> rps = patternProcessor.findAllRelationPatterns(T2, conn);
+            for (RelationPattern rp : rps) {
+                if (rp.getT2().equals(conn) && !rp.isCommutative()) {
+                    parents2.add(conn);
+                }
             }
         }
 
         for (String p1 : parents1) {
             for (String p2 : parents2) {
-                RelationPattern bridge = PatternProcessor.findRelationPattern(p1, p2);
-                if (bridge == null) bridge = PatternProcessor.findRelationPattern(p2, p1);
+                List<RelationPattern> bridges = patternProcessor.findAllRelationPatterns(p1, p2);
+                if (bridges.isEmpty()) bridges = patternProcessor.findAllRelationPatterns(p2, p1);
 
-                if (bridge != null && bridge.getFamily() != null && bridge.isCommutative()) {
-                    shallowResults.addAll(
-                            inferFromFamily(bridge.getFamily(), T1, T2, bridge.isCommutative())
-                    );
+                for (RelationPattern bridge : bridges) {
+                    PatternFamily family = getFamilyForRelation(bridge);
+                    
+                    if (family != null && bridge.isCommutative()) {
+                        // Use ANY commutative bridge between parents
+                        shallowResults.addAll(
+                                inferFromFamily(family, T1, T2, bridge.isCommutative())
+                        );
+                    }
                 }
             }
         }
 
-        // ==========================================
-        // 4. DEEP FALLBACK
-        // ==========================================
+        // 5. RESTORED: Deep Fallback with proper path utilization
         if (shallowResults.isEmpty()) {
             List<String> path = relationFinder.findDeepPath(T1, T2);
+            
             if (path != null && path.size() > 2) {
-
+                // Try ALL possible pairs along the path, not just first and last
+                for (int i = 0; i < path.size() - 1; i++) {
+                    for (int j = i + 1; j < path.size(); j++) {
+                        String node1 = path.get(i);
+                        String node2 = path.get(j);
+                        
+                        // Skip if same as original terms (already tried)
+                        if ((node1.equals(T1) && node2.equals(T2)) || 
+                            (node1.equals(T2) && node2.equals(T1))) {
+                            continue;
+                        }
+                        
+                        // Try to find relation between these nodes
+                        List<RelationPattern> relations = patternProcessor.findAllRelationPatterns(node1, node2);
+                        if (relations.isEmpty()) {
+                            relations = patternProcessor.findAllRelationPatterns(node2, node1);
+                        }
+                        
+                        for (RelationPattern relation : relations) {
+                            PatternFamily family = getFamilyForRelation(relation);
+                            
+                            if (family != null) {
+                                // Use this family to generate sequences for original terms
+                                shallowResults.addAll(
+                                    inferFromFamily(family, T1, T2, relation.isCommutative())
+                                );
+                            }
+                        }
+                    }
+                }
+                
+                // Original logic (for backward compatibility)
                 String firstHopNode = path.get(1);
-                RelationPattern firstLeg = PatternProcessor.findRelationPattern(T1, firstHopNode);
-                if (firstLeg == null) firstLeg = PatternProcessor.findRelationPattern(firstHopNode, T1);
+                List<RelationPattern> firstLegs = patternProcessor.findAllRelationPatterns(T1, firstHopNode);
+                if (firstLegs.isEmpty()) firstLegs = patternProcessor.findAllRelationPatterns(firstHopNode, T1);
 
                 String lastHopNode = path.get(path.size() - 2);
-                RelationPattern lastLeg = PatternProcessor.findRelationPattern(lastHopNode, T2);
-                if (lastLeg == null) lastLeg = PatternProcessor.findRelationPattern(T2, lastHopNode);
+                List<RelationPattern> lastLegs = patternProcessor.findAllRelationPatterns(lastHopNode, T2);
+                if (lastLegs.isEmpty()) lastLegs = patternProcessor.findAllRelationPatterns(T2, lastHopNode);
 
-                if (firstLeg != null && lastLeg != null && firstLeg.getFamily() != null && lastLeg.getFamily() != null) {
-                    
-                    PatternFamily familyToUse = null;
-                    boolean commutativity = false;
-                    String sourceRelation = "";
-
-                    // FIX: Apply same Commutativity Rule to Deep Path
-                    if (firstLeg.isCommutative()) {
-                         familyToUse = firstLeg.getFamily();
-                         commutativity = firstLeg.isCommutative();
-                         sourceRelation = T1 + "->" + firstHopNode + " (First Leg Commutative)";
-                    } else {
-                         familyToUse = lastLeg.getFamily();
-                         commutativity = lastLeg.isCommutative();
-                         sourceRelation = lastHopNode + "->" + T2 + " (Last Leg Inheritance)";
+                if (!firstLegs.isEmpty() && !lastLegs.isEmpty()) {
+                    // Try each combination of first and last leg
+                    for (RelationPattern firstLeg : firstLegs) {
+                        for (RelationPattern lastLeg : lastLegs) {
+                            PatternFamily family1 = getFamilyForRelation(firstLeg);
+                            PatternFamily family2 = getFamilyForRelation(lastLeg);
+                            
+                            if (family1 != null && family2 != null) {
+                                
+                                PatternFamily familyToUse = null;
+                                boolean commutativity = false;
+                                
+                                // FIXED: More flexible family selection
+                                if (firstLeg.isCommutative()) {
+                                     familyToUse = family1;
+                                     commutativity = firstLeg.isCommutative();
+                                } else if (lastLeg.isCommutative()) {
+                                     familyToUse = family2;
+                                     commutativity = lastLeg.isCommutative();
+                                } else {
+                                     // Both non-commutative, just use first family
+                                     familyToUse = family1;
+                                     commutativity = false;
+                                }
+                                
+                                if (familyToUse != null) {
+                                    shallowResults.addAll(
+                                            inferFromFamily(familyToUse, T1, T2, commutativity) 
+                                    );
+                                }
+                            }
+                        }
                     }
-                    
-                    shallowResults.addAll(
-                            inferFromFamily(familyToUse, T1, T2, commutativity) 
-                    );
                 }
             }
         }
+
+        // 6. REMOVED: The "try all families" fallback - too permissive and generates nonsense
+        // If nothing found, return empty list instead of nonsense
 
         List<List<String>> finalResults = new ArrayList<List<String>>(shallowResults);
         relationFinder.validateInferences(T1, T2, finalResults);
         return finalResults;
     }
 
-    public static List<List<String>> inferFromFamily(
+    public List<List<String>> inferFromFamily(
       PatternFamily family, String T1, String T2, boolean useCommutative) {
-    Set<List<String>> inferdSequences = new LinkedHashSet<List<String>>();
-    Map<String, Set<String>> aliases = family.getAliases();
-    Map<String, String> wordToAlias = family.getWordToAlias();
-
-    for (StructuralPattern sp : family.getMemberPatterns()) {
-      if (sp.isCommutative() != useCommutative) {
-        continue;
-      }
-
-      List<String> structuralSlots = sp.getStructuralSlots();
-
-      // Pass 1: Standard Order
-      List<Set<String>> slotsPass1 = new ArrayList<Set<String>>();
-      boolean hasC = false;
-
-      for (String token : structuralSlots) {
-        if (token.equals("[1]")) {
-          slotsPass1.add(new HashSet<String>(Arrays.asList(T1)));
-        } else if (token.equals("[2]")) {
-          slotsPass1.add(new HashSet<String>(Arrays.asList(T2)));
-        } else if (token.equals("[C]")) {
-          // First [C] gets T1, Second [C] gets T2
-          if (!hasC) {
-            slotsPass1.add(new HashSet<String>(Arrays.asList(T1)));
-            hasC = true;
-          } else {
-            slotsPass1.add(new HashSet<String>(Arrays.asList(T2)));
-          }
-        } else if (token.equals("[X]")) {
-          // If T1 is the PF, then T2 is the variable [X], and vice versa.
-          if (T1.startsWith("PF")) {
-            slotsPass1.add(new HashSet<String>(Arrays.asList(T2)));
-          } else {
-            slotsPass1.add(new HashSet<String>(Arrays.asList(T1)));
-          }
-        } else if (wordToAlias.containsKey(token)) {
-          String alias = wordToAlias.get(token);
-          Set<String> equivalents = aliases.get(alias);
-          slotsPass1.add(
-              (equivalents != null) ? equivalents : new HashSet<String>(Arrays.asList(token)));
-        } else {
-          slotsPass1.add(new HashSet<String>(Arrays.asList(token)));
-        }
-      }
-      inferdSequences.addAll(getCombinations(slotsPass1));
-
-      // Pass 2: Flipped (Only if Commutative)
-      if (sp.isCommutative()) {
-        List<Set<String>> slotsFlipped = new ArrayList<Set<String>>();
-        hasC = false;
-
-        for (String token : structuralSlots) {
-          if (token.equals("[1]")) {
-            slotsFlipped.add(new HashSet<String>(Arrays.asList(T2)));
-          } else if (token.equals("[2]")) {
-            slotsFlipped.add(new HashSet<String>(Arrays.asList(T1)));
-          } else if (token.equals("[C]")) {
-            // Flipped: First [C] gets T2, Second [C] gets T1
-            if (!hasC) {
-              slotsFlipped.add(new HashSet<String>(Arrays.asList(T2)));
-              hasC = true;
-            } else {
-              slotsFlipped.add(new HashSet<String>(Arrays.asList(T1)));
-            }
-          } else if (token.equals("[X]")) {
-            // Logic mirrors Pass 1 but assumes implicit flip of role if applicable.
-            // (Note: [X] patterns are typically non-commutative, so this may not trigger)
-            if (T1.startsWith("PF")) {
-               slotsFlipped.add(new HashSet<String>(Arrays.asList(T2)));
-            } else {
-               slotsFlipped.add(new HashSet<String>(Arrays.asList(T1)));
-            }
-          } else if (wordToAlias.containsKey(token)) {
-            String alias = wordToAlias.get(token);
-            Set<String> equivalents = aliases.get(alias);
-            slotsFlipped.add(
-                (equivalents != null) ? equivalents : new HashSet<String>(Arrays.asList(token)));
-          } else {
-            slotsFlipped.add(new HashSet<String>(Arrays.asList(token)));
-          }
-        }
-        inferdSequences.addAll(getCombinations(slotsFlipped));
-      }
+        return inferFromFamily(family, T1, T2, useCommutative, null);
     }
 
-    return new ArrayList<List<String>>(inferdSequences);
-  }
-
-    public static List<List<String>> getCombinations(List<Set<String>> slots) {
-        List<List<String>> combinations = new ArrayList<List<String>>();
-        combinations.add(new ArrayList<String>());
-
-        for (Set<String> slotOptions : slots) {
-            if (slotOptions == null || slotOptions.isEmpty()) {
+    public List<List<String>> inferFromFamily(
+      PatternFamily family, String T1, String T2, boolean useCommutative,
+      Map<String, Set<String>> currentStructuralEquivalents) {
+        
+        Set<List<String>> inferredSequences = new LinkedHashSet<List<String>>();
+        
+        if (family == null) {
+            return new ArrayList<List<String>>(inferredSequences);
+        }
+        
+        if (currentStructuralEquivalents != null) {
+            family.updateAliases(currentStructuralEquivalents);
+        }
+        
+        Map<String, Set<String>> aliases = family.getAliases();
+        Map<String, String> wordToAlias = family.getWordToAlias();
+        
+        for (StructuralPattern sp : family.getMemberPatterns()) {
+            if (sp.isCommutative() != useCommutative) {
                 continue;
             }
-
-            List<List<String>> newCombinations = new ArrayList<List<String>>();
-            if (combinations.isEmpty()) {
-                for(String option : slotOptions) {
-                    List<String> newCombo = new ArrayList<String>();
-                    newCombo.add(option);
-                    newCombinations.add(newCombo);
-                }
-            } else {
-                for (List<String> combo : combinations) {
-                    for (String option : slotOptions) {
-                        List<String> newCombo = new ArrayList<String>(combo);
-                        newCombo.add(option);
-                        newCombinations.add(newCombo);
-                    }
-                }
+          
+            List<String> structuralSlots = family.getAliasedSlots(sp);
+          
+            List<Set<String>> slotsPass1 = PatternSlotFiller.fillPatternSlots(
+                structuralSlots, aliases, wordToAlias, T1, T2, useCommutative, false);
+            
+            List<List<String>> combos1 = Combinatorics.generateCombinations(slotsPass1);
+            inferredSequences.addAll(combos1);
+         
+            if (sp.isCommutative()) {
+                List<Set<String>> slotsFlipped = PatternSlotFiller.fillPatternSlots(
+                    structuralSlots, aliases, wordToAlias, T1, T2, useCommutative, true);
+                
+                List<List<String>> combos2 = Combinatorics.generateCombinations(slotsFlipped);
+                inferredSequences.addAll(combos2);
             }
-            combinations = newCombinations;
         }
-        return combinations;
-    }
+
+        return new ArrayList<List<String>>(inferredSequences);
+      }
 }
