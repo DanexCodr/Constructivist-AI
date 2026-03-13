@@ -34,9 +34,14 @@ public class Main {
   private PatternProcessor patternProcessor;
   private BigramAnalyzer bigramAnalyzer;
   private ContentFinder contentFinder;
+  private SubwordAnalyzer subwordAnalyzer = new SubwordAnalyzer();
 
   public SymbolManager getSymbolManager() {
     return symbolManager;
+  }
+
+  public SubwordAnalyzer getSubwordAnalyzer() {
+    return subwordAnalyzer;
   }
 
   // Helper method to format timestamps
@@ -534,7 +539,7 @@ private void handleGeneration() {
 
   public void run() {
     System.out.println("Constructivist AI - Learn from equivalent sequences");
-    System.out.println("Commands: [l]earn, [p]rocess, [g]enerate, [gr]ammar, [v]iew, [q]uit");
+    System.out.println("Commands: [l]earn, [p]rocess, [g]enerate, [gr]ammar, [sw]ubword, [v]iew, [q]uit");
 
     UnsupervisedClusterer clusterer = new UnsupervisedClusterer(this);
 
@@ -554,6 +559,8 @@ private void handleGeneration() {
         handleGeneration();
       } else if (command.equals("v") || command.equals("view")) {
         printDiscoveredKnowledge();
+      } else if (command.equals("sw") || command.equals("subword")) {
+        handleSubwordView();
       } else {
         System.out.println("Unknown command: '" + command + "'");
       }
@@ -587,10 +594,61 @@ private void handleGeneration() {
     }
     
     clusterer.processClusters();
+
+    List<String> newAffixes = subwordAnalyzer.analyzeVocabulary(
+        symbolManager.getSymbols().keySet());
+    if (!newAffixes.isEmpty()) {
+      System.out.println("   [Subword] Discovered " + newAffixes.size()
+          + " new affix(es): " + newAffixes);
+    }
   }
 
   public boolean hasCommutativeCollapse(List<String> sequence) {
     return patternProcessor.hasCommutativeCollapse(sequence);
+  }
+
+  private void handleSubwordView() {
+    List<String> prefixes = subwordAnalyzer.getKnownPrefixes();
+    List<String> suffixes = subwordAnalyzer.getKnownSuffixes();
+
+    System.out.println("\n=== Discovered Subword Units ===");
+
+    System.out.println("Prefixes (" + prefixes.size() + "):");
+    if (prefixes.isEmpty()) {
+      System.out.println("  (none discovered yet)");
+    } else {
+      List<String> sorted = new ArrayList<String>(prefixes);
+      Collections.sort(sorted);
+      for (String p : sorted) {
+        System.out.println("  " + p + SubwordAnalyzer.AFFIX_MARKER);
+      }
+    }
+
+    System.out.println("Suffixes (" + suffixes.size() + "):");
+    if (suffixes.isEmpty()) {
+      System.out.println("  (none discovered yet)");
+    } else {
+      List<String> sorted = new ArrayList<String>(suffixes);
+      Collections.sort(sorted);
+      for (String s : sorted) {
+        System.out.println("  " + SubwordAnalyzer.AFFIX_MARKER + s);
+      }
+    }
+
+    System.out.println("Segmentation examples (from current vocabulary):");
+    List<String> vocab = new ArrayList<String>(symbolManager.getSymbols().keySet());
+    Collections.sort(vocab);
+    int shown = 0;
+    for (String word : vocab) {
+      List<String> parts = subwordAnalyzer.segment(word);
+      if (parts.size() > 1) {
+        System.out.println("  " + word + "  →  " + parts);
+        if (++shown >= 12) break;
+      }
+    }
+    if (shown == 0) {
+      System.out.println("  (no words segmented yet — learn more data first)");
+    }
   }
 
   public static void main(String[] args) {

@@ -52,6 +52,20 @@ public class Test {
                 "cat is an mammal",     // should become "cat is a mammal"
                 "gr",                   // Grammar command
                 "mammal is an animal",  // already correct, unchanged
+                "sw",                   // View subword units discovered after batch 1
+                "l",                    // Batch 2: commutative pairs that share the ~ing suffix
+                "running and jumping",
+                "jumping and running",
+                "",                     // End batch 2
+                "sw",                   // View: ~ing suffix now discovered
+                "g",                    // Generate commutative sequences for running / jumping
+                "running",
+                "jumping",
+                "l",                    // Batch 3: commutative pairs that share the re~ prefix
+                "replay and rerun",
+                "rerun and replay",
+                "",                     // End batch 3
+                "sw",                   // View: re~ prefix now discovered; replay→[re~,play]
                 "q"                     // Quit command
             };
     
