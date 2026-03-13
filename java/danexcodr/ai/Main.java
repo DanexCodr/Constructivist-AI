@@ -444,24 +444,21 @@ private void handleGeneration() {
     if (results.isEmpty()) {
         System.out.println("   No sequences could be generated.");
     } else {
-        System.out.println("   Generated " + results.size() + " unique sequences:");
-        Collections.sort(
-            results,
-            new Comparator<List<String>>() {
-                @Override
-                public int compare(List<String> o1, List<String> o2) {
-                    return o1.toString().compareTo(o2.toString());
-                }
-            });
+        // Apply learned article correction to every generated sequence and deduplicate.
+        LinkedHashSet<String> corrected = new LinkedHashSet<String>();
         for (List<String> seq : results) {
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < seq.size(); i++) {
                 sb.append(seq.get(i));
-                if (i < seq.size() - 1) {
-                    sb.append(" ");
-                }
+                if (i < seq.size() - 1) sb.append(" ");
             }
-            System.out.println("     " + sb.toString());
+            corrected.add(applyArticleCorrection(sb.toString()));
+        }
+        List<String> sortedCorrected = new ArrayList<String>(corrected);
+        Collections.sort(sortedCorrected);
+        System.out.println("   Generated " + sortedCorrected.size() + " unique sequences:");
+        for (String seq : sortedCorrected) {
+            System.out.println("     " + seq);
         }
     }
 }
