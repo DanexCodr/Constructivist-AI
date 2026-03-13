@@ -18,26 +18,20 @@ public class PatternFamilyManager {
         updateFamilyMap();
     }
 
-    // CHANGED: Removed familiesDirty parameter
     public List<PatternFamily> getPatternFamilies(Map<String, Set<String>> structuralEquivalents, 
                                                      PatternFamilyBuilder familyBuilder) {
         if (familiesDirty || cachedFamilies == null) {
-            // CHANGED: Build families from all accumulated patterns
-            PatternFamilyBuilder builderToUse;
-            if (familyBuilder != null) {
-                builderToUse = familyBuilder;
-            } else {
-                builderToUse = new PatternFamilyBuilder(structuralEquivalents);
-            }
-            
-            // Add ALL accumulated patterns to builder
+            // Always create a fresh builder so patterns are never counted more than once.
+            // The shared familyBuilder passed in already has patterns added by PatternProcessor;
+            // reusing it would duplicate every pattern in allTemporaryPatterns and inflate
+            // family frequency counters exponentially on each rebuild.
+            PatternFamilyBuilder freshBuilder = new PatternFamilyBuilder(structuralEquivalents);
             for (StructuralPattern pattern : allTemporaryPatterns) {
-                builderToUse.addPattern(pattern);
+                freshBuilder.addPattern(pattern);
             }
-            
-            cachedFamilies = builderToUse.buildPatternFamilies();
+            cachedFamilies = freshBuilder.buildPatternFamilies();
             updateFamilyMap();
-            familiesDirty = false; // NEW: Reset internal flag
+            familiesDirty = false;
         }
         return cachedFamilies;
     }

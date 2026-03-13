@@ -466,9 +466,41 @@ private void handleGeneration() {
     }
 }
 
+  /**
+   * Corrects a/an article usage in a sentence: uses "an" before vowel-initial words
+   * and "a" before consonant-initial words.
+   */
+  private String applyArticleCorrection(String sentence) {
+    String[] words = sentence.split("\\s+");
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < words.length; i++) {
+      String word = words[i];
+      String lower = word.toLowerCase();
+      if ((lower.equals("a") || lower.equals("an")) && i + 1 < words.length
+          && !words[i + 1].isEmpty()) {
+        char firstChar = Character.toLowerCase(words[i + 1].charAt(0));
+        word = "aeiou".indexOf(firstChar) >= 0 ? "an" : "a";
+      }
+      if (i > 0) sb.append(" ");
+      sb.append(word);
+    }
+    return sb.toString();
+  }
+
+  private void handleGrammar() {
+    System.out.println("       Enter sentence to correct:");
+    System.out.print("       $   ");
+    String line = scanner.nextLine().trim();
+    if (line.isEmpty()) {
+      System.out.println("   No sentence entered.");
+      return;
+    }
+    System.out.println("   " + applyArticleCorrection(line));
+  }
+
   public void run() {
     System.out.println("Constructivist AI - Learn from equivalent sequences");
-    System.out.println("Commands: [l]earn, [p]rocess, [g]enerate, [v]iew, [q]uit");
+    System.out.println("Commands: [l]earn, [p]rocess, [g]enerate, [gr]ammar, [v]iew, [q]uit");
 
     UnsupervisedClusterer clusterer = new UnsupervisedClusterer(this);
 
@@ -482,6 +514,8 @@ private void handleGeneration() {
         handleUnifiedLearn(clusterer);
       } else if (command.equals("p") || command.equals("process")) {
         processNewSequence();
+      } else if (command.equals("gr") || command.equals("grammar")) {
+        handleGrammar();
       } else if (command.equals("g") || command.equals("generate")) {
         handleGeneration();
       } else if (command.equals("v") || command.equals("view")) {

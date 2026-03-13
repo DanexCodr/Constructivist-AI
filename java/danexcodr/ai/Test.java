@@ -46,6 +46,12 @@ public class Test {
                 "g",                    // Generate command
                 "cat",                  // term1
                 "animal",               // term2
+                "gr",                   // Grammar command
+                "cat is a animal",      // should become "cat is an animal"
+                "gr",                   // Grammar command
+                "cat is an mammal",     // should become "cat is a mammal"
+                "gr",                   // Grammar command
+                "mammal is an animal",  // already correct, unchanged
                 "q"                     // Quit command
             };
     
