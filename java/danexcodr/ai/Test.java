@@ -49,16 +49,70 @@ public class Test {
                 "q"
             };
 
-    private static void printScriptedInputs() {
-        System.out.println("Scripted input lines:");
-        for (int i = 0; i < inputLines.length; i++) {
-            String line = inputLines[i];
+    private static class EchoingInputStream extends InputStream {
+        private final InputStream delegate;
+        private final StringBuilder lineBuffer = new StringBuilder();
+        private int lineNumber = 0;
+
+        EchoingInputStream(InputStream delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public int read() throws java.io.IOException {
+            int value = delegate.read();
+            if (value != -1) {
+                processByte(value);
+            } else {
+                flushPendingLine();
+            }
+            return value;
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws java.io.IOException {
+            int count = delegate.read(b, off, len);
+            if (count > 0) {
+                for (int i = off; i < off + count; i++) {
+                    processByte(b[i] & 0xFF);
+                }
+            } else if (count == -1) {
+                flushPendingLine();
+            }
+            return count;
+        }
+
+        @Override
+        public void close() throws java.io.IOException {
+            delegate.close();
+        }
+
+        private void processByte(int value) {
+            if (value == '\r') {
+                return;
+            }
+            if (value == '\n') {
+                emitCurrentLine();
+                return;
+            }
+            lineBuffer.append((char) value);
+        }
+
+        private void emitCurrentLine() {
+            lineNumber++;
+            String line = lineBuffer.toString();
             if (line.length() == 0) {
                 line = "<empty>";
             }
-            System.out.println("  [" + (i + 1) + "] " + line);
+            System.out.println("  [input " + lineNumber + "] " + line);
+            lineBuffer.setLength(0);
         }
-        System.out.println();
+
+        private void flushPendingLine() {
+            if (lineBuffer.length() > 0) {
+                emitCurrentLine();
+            }
+        }
     }
     
     public static void main(String[] args) throws Exception {
@@ -77,10 +131,11 @@ public class Test {
             String inputSequence = inputBuilder.toString();
             
             System.out.println("Running with " + inputLines.length + " input lines...\n");
-            printScriptedInputs();
             
             // Redirect System.in to our input sequence
-            System.setIn(new ByteArrayInputStream(inputSequence.getBytes(StandardCharsets.UTF_8)));
+            System.setIn(
+                new EchoingInputStream(
+                    new ByteArrayInputStream(inputSequence.getBytes(StandardCharsets.UTF_8))));
             
             // Run the main AI
             Main.main(args);
