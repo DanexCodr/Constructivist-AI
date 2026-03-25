@@ -72,15 +72,22 @@ public class Test {
 
         @Override
         public int read(byte[] b, int off, int len) throws java.io.IOException {
-            int count = delegate.read(b, off, len);
-            if (count > 0) {
-                for (int i = off; i < off + count; i++) {
-                    processByte(b[i] & 0xFF);
-                }
-            } else if (count == -1) {
-                flushPendingLine();
+            if (b == null) {
+                throw new NullPointerException();
             }
-            return count;
+            if (off < 0 || len < 0 || len > b.length - off) {
+                throw new IndexOutOfBoundsException();
+            }
+            if (len == 0) {
+                return 0;
+            }
+
+            int first = read();
+            if (first == -1) {
+                return -1;
+            }
+            b[off] = (byte) first;
+            return 1;
         }
 
         @Override
