@@ -55,8 +55,8 @@ public class StructuralEquivalenceDetector {
         Map<String, Set<List<String>>> templates = new HashMap<String, Set<List<String>>>();
         
         for (Pattern pattern : allPatterns) {
-            if (pattern instanceof StructuralPattern) {
-                StructuralPattern sp = (StructuralPattern) pattern;
+            if (pattern instanceof Structure) {
+                Structure sp = (Structure) pattern;
                 List<String> structuralSlots = sp.getStructuralSlots();
                 
                 List<String> template = new ArrayList<String>();
@@ -193,7 +193,7 @@ public class StructuralEquivalenceDetector {
         
         Set<EquivalencePair> foundEquivalents = new HashSet<EquivalencePair>();
         
-        Map<Set<String>, Set<StructuralPattern>> existingFamilies = groupPatternsByStructuralFamily(allPatterns);
+        Map<Set<String>, Set<Structure>> existingFamilies = groupPatternsByStructuralFamily(allPatterns);
         
         if (existingFamilies.isEmpty()) {
             return foundEquivalents;
@@ -209,7 +209,7 @@ public class StructuralEquivalenceDetector {
         
         Set<String> currentStructuralSignature = extractStructuralSignature(currentPatternFamily);
         
-        for (Entry<Set<String>, Set<StructuralPattern>> familyEntry : existingFamilies.entrySet()) {
+        for (Entry<Set<String>, Set<Structure>> familyEntry : existingFamilies.entrySet()) {
             Set<String> existingStructuralSignature = familyEntry.getKey();
             
             if (haveSimilarStructuralSignature(currentStructuralSignature, existingStructuralSignature)) {
@@ -218,7 +218,7 @@ public class StructuralEquivalenceDetector {
                     List<String> flippedCurrent = SequenceTransformer.flipTermPattern(currentPattern);
                     boolean isCurrentCommutative = !currentPattern.equals(flippedCurrent) && currentPatternFamily.contains(flippedCurrent);
 
-                    for (StructuralPattern existingPattern : familyEntry.getValue()) {
+                    for (Structure existingPattern : familyEntry.getValue()) {
                         
                         if (existingPattern.isCommutative() != isCurrentCommutative) {
                             continue;
@@ -261,12 +261,12 @@ public class StructuralEquivalenceDetector {
         return false;
     }
 
-    private Map<Set<String>, Set<StructuralPattern>> groupPatternsByStructuralFamily(List<Pattern> allPatterns) {
-        Map<Set<String>, Set<StructuralPattern>> families = new HashMap<Set<String>, Set<StructuralPattern>>();
+    private Map<Set<String>, Set<Structure>> groupPatternsByStructuralFamily(List<Pattern> allPatterns) {
+        Map<Set<String>, Set<Structure>> families = new HashMap<Set<String>, Set<Structure>>();
         
         for (Pattern pattern : allPatterns) {
-            if (pattern instanceof StructuralPattern) {
-                StructuralPattern sp = (StructuralPattern) pattern;
+            if (pattern instanceof Structure) {
+                Structure sp = (Structure) pattern;
                 Set<String> structuralSignature = new HashSet<String>();
                 for (String word : sp.getStructuralSlots()) {
                     if (!word.equals("[1]") && !word.equals("[2]")) {
@@ -275,7 +275,7 @@ public class StructuralEquivalenceDetector {
                 }
                 
                 if (!families.containsKey(structuralSignature)) {
-                    families.put(structuralSignature, new HashSet<StructuralPattern>());
+                    families.put(structuralSignature, new HashSet<Structure>());
                 }
                 families.get(structuralSignature).add(sp);
             }
@@ -327,7 +327,7 @@ public class StructuralEquivalenceDetector {
         return true;
     }
 
-    private boolean shareSemanticContext(StructuralPattern existingPattern, List<String> currentPattern, Set<String> currentContentWords) {
+    private boolean shareSemanticContext(Structure existingPattern, List<String> currentPattern, Set<String> currentContentWords) {
         
         Set<String> existingContentWords = new HashSet<String>();
         

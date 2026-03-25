@@ -101,11 +101,6 @@ public class UnsupervisedClusterer {
     }
 
     public void testAndAddSentence(List<String> newSentence, String originalLine) {
-        // Apply sub-word segmentation if affixes have already been discovered.
-        if (ai.getSubwordAnalyzer().hasKnownAffixes()) {
-            newSentence = ai.getSubwordAnalyzer().expandSequence(newSentence);
-        }
-
         // Ensure symbols exist
         for (String word : newSentence) {
             ai.getSymbolManager().ensureSymbolExists(word);

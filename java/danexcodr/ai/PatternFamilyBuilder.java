@@ -10,14 +10,14 @@ import danexcodr.ai.pattern.*;
 public class PatternFamilyBuilder {
     
     private Map<String, Set<String>> structuralEquivalents;
-    private List<StructuralPattern> tempPatterns = new ArrayList<StructuralPattern>();
+    private List<Structure> tempPatterns = new ArrayList<Structure>();
     
     public PatternFamilyBuilder(Map<String, Set<String>> structuralEquivalents) {
         this.structuralEquivalents = structuralEquivalents;
     }
     
     // Add temporary patterns during learning
-    public void addPattern(StructuralPattern pattern) {
+    public void addPattern(Structure pattern) {
         tempPatterns.add(pattern);
     }
    
@@ -66,7 +66,7 @@ public class PatternFamilyBuilder {
         }
         
         // Build relations from temporary patterns
-        for (StructuralPattern pattern : tempPatterns) {
+        for (Structure pattern : tempPatterns) {
             boolean isCommutative = pattern.isCommutative();
             List<String> structuralSlots = pattern.getStructuralSlots();
             
@@ -167,7 +167,7 @@ public class PatternFamilyBuilder {
         long earliest = Long.MAX_VALUE;
         if (family.getMemberPatterns().isEmpty()) return family.getCreatedAt();
 
-        for (StructuralPattern sp : family.getMemberPatterns()) {
+        for (Structure sp : family.getMemberPatterns()) {
             if (sp.getCreatedAt() < earliest) {
                 earliest = sp.getCreatedAt();
             }
@@ -196,7 +196,7 @@ public class PatternFamilyBuilder {
             component.add(k.token);
         }
         
-        for (StructuralPattern pattern : tempPatterns) {
+        for (Structure pattern : tempPatterns) {
             boolean isCommutative = pattern.isCommutative();
             List<String> patternSlots = pattern.getStructuralSlots();
             

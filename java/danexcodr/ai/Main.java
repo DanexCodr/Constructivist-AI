@@ -20,7 +20,7 @@ public class Main {
   private Map<String, Set<String>> structuralEquivalents =
       new HashMap<String, Set<String>>();
 
-  private List<Pattern> allPatterns = new ArrayList<Pattern>(); // Now only RelationPatterns
+  private List<Pattern> allPatterns = new ArrayList<Pattern>(); // Now only Contents
   private boolean familiesDirty = true;
 
   // --- Helper Modules ---
@@ -34,14 +34,9 @@ public class Main {
   private PatternProcessor patternProcessor;
   private BigramAnalyzer bigramAnalyzer;
   private ContentFinder contentFinder;
-  private SubwordAnalyzer subwordAnalyzer = new SubwordAnalyzer();
 
   public SymbolManager getSymbolManager() {
     return symbolManager;
-  }
-
-  public SubwordAnalyzer getSubwordAnalyzer() {
-    return subwordAnalyzer;
   }
 
   // Helper method to format timestamps
@@ -143,8 +138,8 @@ public void printDiscoveredKnowledge() {
           + " | Created: " + formatTimestamp(timestamped.getCreatedAt())
           + " | Modified: " + formatTimestamp(timestamped.getLastModifiedAt()));
 
-      if (pattern instanceof RelationPattern) {
-        RelationPattern rp = (RelationPattern) pattern;
+      if (pattern instanceof Content) {
+        Content rp = (Content) pattern;
         System.out.print(
             " - Relation: " + rp.getT1() + (rp.isCommutative() ? " <-> " : " -> ") + rp.getT2());
         if (rp.isCommutative()) System.out.print(" [commutative]");
@@ -195,8 +190,8 @@ public void printDiscoveredKnowledge() {
         }
 
         // 2. Reconstruct Generalized Pattern from Longest Member
-        StructuralPattern longest = null;
-        for(StructuralPattern sp : family.getMemberPatterns()) {
+        Structure longest = null;
+        for(Structure sp : family.getMemberPatterns()) {
              if(longest == null || sp.getStructuralSlots().size() > longest.getStructuralSlots().size()) {
                  longest = sp;
              }
@@ -228,7 +223,7 @@ public void printDiscoveredKnowledge() {
                 if (!isSpecial) {
                      String targetAlias = family.getWordToAlias().get(token);
                      
-                     for(StructuralPattern member : family.getMemberPatterns()) {
+                     for(Structure member : family.getMemberPatterns()) {
                          boolean memberHasIt = false;
                          for (String memberToken : member.getStructuralSlots()) {
                              if (memberToken.equals(token)) {
@@ -258,23 +253,64 @@ public void printDiscoveredKnowledge() {
             + " | Created: " + formatTimestamp(family.getCreatedAt())
             + " | Modified: " + formatTimestamp(family.getLastModifiedAt()));
             
-        // Show which RelationPatterns belong to this family
-        List<RelationPattern> familyPatterns = new ArrayList<RelationPattern>();
+        // Show which Contents belong to this family (CLEAN VERSION)
+        List<String> familyPatternIds = new ArrayList<String>();
         for (Pattern pattern : allPatterns) {
-            if (pattern instanceof RelationPattern) {
-                RelationPattern rp = (RelationPattern) pattern;
+            if (pattern instanceof Content) {
+                Content rp = (Content) pattern;
                 if (family.getId().equals(rp.getFamilyId())) {
-                    familyPatterns.add(rp);
+                    familyPatternIds.add(rp.getId());
                 }
             }
         }
         
-        if (!familyPatterns.isEmpty()) {
-            System.out.println("    Contains relations:");
-            for (RelationPattern rp : familyPatterns) {
-                System.out.println("      " + rp.getT1() + (rp.isCommutative() ? " <-> " : " -> ") + 
-                                 rp.getT2() + " (" + rp.getId() + ")");
+        if (!familyPatternIds.isEmpty()) {
+            // Sort the IDs by their numeric part
+            Collections.sort(familyPatternIds, new Comparator<String>() {
+                @Override
+                public int compare(String o1, String o2) {
+                    int num1 = extractRPNumber(o1);
+                    int num2 = extractRPNumber(o2);
+                    return Integer.compare(num1, num2);
+                }
+                
+                private int extractRPNumber(String rpId) {
+                    if (rpId.startsWith("RP")) {
+                        try {
+                            return Integer.parseInt(rpId.substring(2));
+                        } catch (NumberFormatException e) {
+                            return 0;
+                        }
+                    }
+                    return 0;
+                }
+            });
+            
+            // Extract just the numbers for cleaner display
+            List<String> rpNumbers = new ArrayList<String>();
+            for (String id : familyPatternIds) {
+                if (id.startsWith("RP")) {
+                    try {
+                        String num = id.substring(2);
+                        Integer.parseInt(num); // Validate it's a number
+                        rpNumbers.add(num);
+                    } catch (NumberFormatException e) {
+                        rpNumbers.add(id);
+                    }
+                } else {
+                    rpNumbers.add(id);
+                }
             }
+            
+            // Java 7 compatible string joining
+            StringBuilder rpDisplay = new StringBuilder();
+            for (int i = 0; i < rpNumbers.size(); i++) {
+                rpDisplay.append(rpNumbers.get(i));
+                if (i < rpNumbers.size() - 1) {
+                    rpDisplay.append(", ");
+                }
+            }
+            System.out.println("    RP: " + rpDisplay.toString());
         }
       }
     }
@@ -388,8 +424,8 @@ public Main() {
         pattern.addConcreteExample(new ArrayList<String>(sequence));
         familiesDirty = true;
 
-        if (pattern instanceof RelationPattern) {
-          RelationPattern rp = (RelationPattern) pattern;
+        if (pattern instanceof Content) {
+          Content rp = (Content) pattern;
           System.out.println(
               "   Matched relation pattern: "
                   + rp.getT1()
@@ -449,97 +485,31 @@ private void handleGeneration() {
     if (results.isEmpty()) {
         System.out.println("   No sequences could be generated.");
     } else {
-        // Apply learned article correction to every generated sequence and deduplicate.
-        LinkedHashSet<String> corrected = new LinkedHashSet<String>();
+        System.out.println("   Generated " + results.size() + " unique sequences:");
+        Collections.sort(
+            results,
+            new Comparator<List<String>>() {
+                @Override
+                public int compare(List<String> o1, List<String> o2) {
+                    return o1.toString().compareTo(o2.toString());
+                }
+            });
         for (List<String> seq : results) {
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < seq.size(); i++) {
                 sb.append(seq.get(i));
-                if (i < seq.size() - 1) sb.append(" ");
+                if (i < seq.size() - 1) {
+                    sb.append(" ");
+                }
             }
-            corrected.add(applyArticleCorrection(sb.toString()));
-        }
-        List<String> sortedCorrected = new ArrayList<String>(corrected);
-        Collections.sort(sortedCorrected);
-        System.out.println("   Generated " + sortedCorrected.size() + " unique sequences:");
-        for (String seq : sortedCorrected) {
-            System.out.println("     " + seq);
+            System.out.println("     " + sb.toString());
         }
     }
 }
 
-  /**
-   * Corrects structural-word usage in a sentence using learned knowledge.
-   * For every word that has known structural equivalents (e.g. "a" ~ "an"),
-   * the word is replaced by whichever equivalent appears most often in the
-   * left-context of the following word according to the symbol table.
-   * No words are hardcoded: the correction is driven entirely by what the
-   * AI has been taught.
-   */
-  private String applyArticleCorrection(String sentence) {
-    String[] words = sentence.split("\\s+");
-    StringBuilder sb = new StringBuilder();
-    for (int i = 0; i < words.length; i++) {
-      String word = words[i];
-      String canonical = symbolManager.getCanonical(word.toLowerCase());
-
-      // Only attempt correction when the word has known structural equivalents
-      // and there is a following word whose left-context we can consult.
-      if (i + 1 < words.length && structuralEquivalents.containsKey(canonical)) {
-        String nextCanonical = symbolManager.getCanonical(words[i + 1].toLowerCase());
-        Symbol nextSymbol = symbolManager.getSymbols().get(nextCanonical);
-
-        if (nextSymbol != null) {
-          // Build the full equivalence group: the word itself + all its equivalents.
-          Set<String> group = new HashSet<String>();
-          group.add(canonical);
-          Set<String> equivs = structuralEquivalents.get(canonical);
-          if (equivs != null) {
-            group.addAll(equivs);
-          }
-
-          // Pick the equivalent seen most often immediately before the next word.
-          String bestEquivalent = null;
-          int bestCount = 0;
-          for (String equiv : group) {
-            Integer count = nextSymbol.leftContext.get(equiv);
-            if (count != null && count > bestCount) {
-              bestCount = count;
-              bestEquivalent = equiv;
-            }
-          }
-          if (bestEquivalent != null) {
-            // Preserve sentence-initial capitalisation from the original word.
-            if (Character.isUpperCase(word.charAt(0))) {
-              word = Character.toUpperCase(bestEquivalent.charAt(0))
-                  + bestEquivalent.substring(1);
-            } else {
-              word = bestEquivalent;
-            }
-          }
-        }
-      }
-
-      if (i > 0) sb.append(" ");
-      sb.append(word);
-    }
-    return sb.toString();
-  }
-
-  private void handleGrammar() {
-    System.out.println("       Enter sentence to correct:");
-    System.out.print("       $   ");
-    String line = scanner.nextLine().trim();
-    if (line.isEmpty()) {
-      System.out.println("   No sentence entered.");
-      return;
-    }
-    System.out.println("   " + applyArticleCorrection(line));
-  }
-
   public void run() {
     System.out.println("Constructivist AI - Learn from equivalent sequences");
-    System.out.println("Commands: [l]earn, [p]rocess, [g]enerate, [gr]ammar, [sw]ubword, [v]iew, [q]uit");
+    System.out.println("Commands: [l]earn, [p]rocess, [a]nalyze, [g]enerate, [v]iew, [q]uit");
 
     UnsupervisedClusterer clusterer = new UnsupervisedClusterer(this);
 
@@ -553,14 +523,10 @@ private void handleGeneration() {
         handleUnifiedLearn(clusterer);
       } else if (command.equals("p") || command.equals("process")) {
         processNewSequence();
-      } else if (command.equals("gr") || command.equals("grammar")) {
-        handleGrammar();
-      } else if (command.equals("g") || command.equals("generate")) {
+      } else if (command.equals("a") || command.equals("analyze")) {
         handleGeneration();
       } else if (command.equals("v") || command.equals("view")) {
         printDiscoveredKnowledge();
-      } else if (command.equals("sw") || command.equals("subword")) {
-        handleSubwordView();
       } else {
         System.out.println("Unknown command: '" + command + "'");
       }
@@ -594,61 +560,10 @@ private void handleGeneration() {
     }
     
     clusterer.processClusters();
-
-    List<String> newAffixes = subwordAnalyzer.analyzeVocabulary(
-        symbolManager.getSymbols().keySet());
-    if (!newAffixes.isEmpty()) {
-      System.out.println("   [Subword] Discovered " + newAffixes.size()
-          + " new affix(es): " + newAffixes);
-    }
   }
 
   public boolean hasCommutativeCollapse(List<String> sequence) {
     return patternProcessor.hasCommutativeCollapse(sequence);
-  }
-
-  private void handleSubwordView() {
-    List<String> prefixes = subwordAnalyzer.getKnownPrefixes();
-    List<String> suffixes = subwordAnalyzer.getKnownSuffixes();
-
-    System.out.println("\n=== Discovered Subword Units ===");
-
-    System.out.println("Prefixes (" + prefixes.size() + "):");
-    if (prefixes.isEmpty()) {
-      System.out.println("  (none discovered yet)");
-    } else {
-      List<String> sorted = new ArrayList<String>(prefixes);
-      Collections.sort(sorted);
-      for (String p : sorted) {
-        System.out.println("  " + p + SubwordAnalyzer.AFFIX_MARKER);
-      }
-    }
-
-    System.out.println("Suffixes (" + suffixes.size() + "):");
-    if (suffixes.isEmpty()) {
-      System.out.println("  (none discovered yet)");
-    } else {
-      List<String> sorted = new ArrayList<String>(suffixes);
-      Collections.sort(sorted);
-      for (String s : sorted) {
-        System.out.println("  " + SubwordAnalyzer.AFFIX_MARKER + s);
-      }
-    }
-
-    System.out.println("Segmentation examples (from current vocabulary):");
-    List<String> vocab = new ArrayList<String>(symbolManager.getSymbols().keySet());
-    Collections.sort(vocab);
-    int shown = 0;
-    for (String word : vocab) {
-      List<String> parts = subwordAnalyzer.segment(word);
-      if (parts.size() > 1) {
-        System.out.println("  " + word + "  →  " + parts);
-        if (++shown >= 12) break;
-      }
-    }
-    if (shown == 0) {
-      System.out.println("  (no words segmented yet — learn more data first)");
-    }
   }
 
   public static void main(String[] args) {
