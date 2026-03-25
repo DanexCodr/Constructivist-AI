@@ -276,7 +276,8 @@ private double computeAdaptiveThreshold(List<Score> scores) {
     if (idx >= values.size()) idx = values.size() - 1;
 
     double median = values.get(idx);
-    return Math.max(MAX_SENSITIVITY, median);
+    double adaptive = Math.min(MAX_SENSITIVITY, median);
+    return Math.max(0.25, adaptive);
 }
 
 /**
