@@ -53,7 +53,6 @@ public class Test {
     private static class EchoingInputStream extends InputStream {
         private final InputStream delegate;
         private final ByteArrayOutputStream lineBuffer = new ByteArrayOutputStream();
-        private int lineNumber = 0;
 
         EchoingInputStream(InputStream delegate) {
             this.delegate = delegate;
@@ -109,13 +108,12 @@ public class Test {
         }
 
         private void emitCurrentLine() {
-            lineNumber++;
             String line = new String(lineBuffer.toByteArray(), StandardCharsets.UTF_8);
             if (line.length() == 0) {
                 // Make consumed blank input visible in the auto-run transcript.
                 line = "<empty>";
             }
-            System.out.println("  [input " + lineNumber + "] " + line);
+            System.out.println("  " + line);
             lineBuffer.reset();
         }
 
