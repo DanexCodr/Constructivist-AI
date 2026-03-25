@@ -14,6 +14,11 @@ import java.util.Set;
 
 public class ContentFinder {
 
+  private static final double MOVEMENT_WEIGHT = 0.50;
+  private static final double CONTEXT_WEIGHT = 0.30;
+  private static final double ENTROPY_WEIGHT = 0.20;
+  private static final double MIN_ADAPTIVE_THRESHOLD = 0.25;
+
   private OptionalFinder optionalFinder;
   private BigramAnalyzer bigramAnalyzer;
  
@@ -28,20 +33,22 @@ public class ContentFinder {
 
   private static class Score implements Comparable<Score> {
     String token;
+    double score;
     double movementScore;
     double contextScore;
     double entropyScore;
 
     Score(String token, double movementScore, double contextScore, double entropyScore, double score) {
       this.token = token;
-      this.movementScore = score;
+      this.score = score;
+      this.movementScore = movementScore;
       this.contextScore = contextScore;
       this.entropyScore = entropyScore;
     }
 
     @Override
     public int compareTo(Score other) {
-      int scoreCompare = Double.compare(other.movementScore, this.movementScore);
+      int scoreCompare = Double.compare(other.score, this.score);
       if (scoreCompare != 0) {
         return scoreCompare;
       }
@@ -51,7 +58,7 @@ public class ContentFinder {
     @Override
     public int hashCode() {
       int result = 17;
-      long temp = Double.doubleToLongBits(movementScore);
+      long temp = Double.doubleToLongBits(score);
       result = 31 * result + (int) (temp ^ (temp >>> 32));
       result = 31 * result + (token != null ? token.hashCode() : 0);
       return result;
@@ -64,7 +71,7 @@ public class ContentFinder {
 
       Score that = (Score) obj;
 
-      if (Double.compare(that.movementScore, this.movementScore) != 0) return false;
+      if (Double.compare(that.score, this.score) != 0) return false;
       if (this.token == null) {
         return that.token == null;
       } else {
@@ -162,7 +169,7 @@ public class ContentFinder {
         }
     }
 
-    final List<Score> Scores = new ArrayList<Score>();
+    final List<Score> scores = new ArrayList<Score>();
     for (String token : all) {
         Set<Integer> poss = positions.get(token);
         int movementCount = (poss != null) ? poss.size() : 0;
@@ -175,7 +182,7 @@ public class ContentFinder {
 
         double entropyNorm = normalizedPositionEntropy(positionCounts.get(token));
 
-        double score = (0.50 * movementNorm) + (0.30 * contextNorm) + (0.20 * entropyNorm);
+        double score = (MOVEMENT_WEIGHT * movementNorm) + (CONTEXT_WEIGHT * contextNorm) + (ENTROPY_WEIGHT * entropyNorm);
 
         if (learnedStructurals != null && learnedStructurals.contains(token)) {
             score *= 0.5;
@@ -187,17 +194,17 @@ public class ContentFinder {
             score *= 0.1;
         }
 
-        Scores.add(new Score(token, movementNorm, contextNorm, entropyNorm, score));
+        scores.add(new Score(token, movementNorm, contextNorm, entropyNorm, score));
     }
 
-    Collections.sort(Scores);
-    double adaptiveThreshold = computeAdaptiveThreshold(Scores);
+    Collections.sort(scores);
+    double adaptiveThreshold = computeAdaptiveThreshold(scores);
         
     // ========================================
 
     Set<String> contents = new LinkedHashSet<String>();
-    for (Score ws : Scores) {
-        if (ws.movementScore >= adaptiveThreshold) {
+    for (Score ws : scores) {
+        if (ws.score >= adaptiveThreshold) {
             contents.add(ws.token);
         } else {
             break;
@@ -211,9 +218,9 @@ public class ContentFinder {
             public int compare(String w1, String w2) {
                 double score1 = 0.0;
                 double score2 = 0.0;
-                for (Score ws : Scores) {
-                    if (ws.token.equals(w1)) score1 = ws.movementScore;
-                    if (ws.token.equals(w2)) score2 = ws.movementScore;
+                for (Score ws : scores) {
+                    if (ws.token.equals(w1)) score1 = ws.score;
+                    if (ws.token.equals(w2)) score2 = ws.score;
                 }
                 return Double.compare(score2, score1);
             }
@@ -229,6 +236,14 @@ public class ContentFinder {
     return contents;
 }
 
+/**
+ * Computes normalized entropy of a token's positional distribution across sequences.
+ * A score near 0.0 means the token is position-stable; a score near 1.0 means it is
+ * distributed more evenly across multiple positions.
+ *
+ * @param countsByPosition map of index -> observed frequency for a token
+ * @return normalized entropy in the range [0.0, 1.0]
+ */
 private double normalizedPositionEntropy(Map<Integer, Integer> countsByPosition) {
     if (countsByPosition == null || countsByPosition.size() <= 1) {
         return 0.0;
@@ -260,6 +275,14 @@ private double log2(double value) {
     return Math.log(value) / Math.log(2.0);
 }
 
+/**
+ * Computes a batch-adaptive score threshold using the median ensemble score.
+ * The threshold is upper-bounded by MAX_SENSITIVITY to preserve existing behavior
+ * and lower-bounded by MIN_ADAPTIVE_THRESHOLD to avoid selecting near-zero scores.
+ *
+ * @param scores ranked candidate scores for the current sequence batch
+ * @return adaptive threshold for content selection
+ */
 private double computeAdaptiveThreshold(List<Score> scores) {
     if (scores == null || scores.isEmpty()) {
         return MAX_SENSITIVITY;
@@ -267,17 +290,21 @@ private double computeAdaptiveThreshold(List<Score> scores) {
 
     List<Double> values = new ArrayList<Double>();
     for (Score s : scores) {
-        values.add(s.movementScore);
+        values.add(s.score);
     }
     Collections.sort(values);
 
-    int idx = (int) Math.floor((values.size() - 1) * 0.5);
-    if (idx < 0) idx = 0;
-    if (idx >= values.size()) idx = values.size() - 1;
-
-    double median = values.get(idx);
+    double median;
+    int size = values.size();
+    if (size % 2 == 0) {
+        int upper = size / 2;
+        int lower = upper - 1;
+        median = (values.get(lower) + values.get(upper)) / 2.0;
+    } else {
+        median = values.get(size / 2);
+    }
     double adaptive = Math.min(MAX_SENSITIVITY, median);
-    return Math.max(0.25, adaptive);
+    return Math.max(MIN_ADAPTIVE_THRESHOLD, adaptive);
 }
 
 /**
