@@ -29,10 +29,14 @@ public class ContentFinder {
   private static class Score implements Comparable<Score> {
     String token;
     double movementScore;
+    double contextScore;
+    double entropyScore;
 
-    Score(String token, double score) {
+    Score(String token, double movementScore, double contextScore, double entropyScore, double score) {
       this.token = token;
       this.movementScore = score;
+      this.contextScore = contextScore;
+      this.entropyScore = entropyScore;
     }
 
     @Override
@@ -76,6 +80,9 @@ public class ContentFinder {
     }
 
     Map<String, Set<Integer>> positions = new HashMap<String, Set<Integer>>();
+    Map<String, Map<Integer, Integer>> positionCounts = new HashMap<String, Map<Integer, Integer>>();
+    Map<String, Set<String>> leftContexts = new HashMap<String, Set<String>>();
+    Map<String, Set<String>> rightContexts = new HashMap<String, Set<String>>();
     Set<String> all = new HashSet<String>();
 
     for (List<String> sequence : sequences) {
@@ -86,6 +93,26 @@ public class ContentFinder {
                 positions.put(token, new HashSet<Integer>());
             }
             positions.get(token).add(i);
+
+            if (!positionCounts.containsKey(token)) {
+                positionCounts.put(token, new HashMap<Integer, Integer>());
+            }
+            Map<Integer, Integer> counts = positionCounts.get(token);
+            Integer current = counts.get(i);
+            counts.put(i, (current == null) ? 1 : current + 1);
+
+            if (i > 0) {
+                if (!leftContexts.containsKey(token)) {
+                    leftContexts.put(token, new HashSet<String>());
+                }
+                leftContexts.get(token).add(sequence.get(i - 1));
+            }
+            if (i < sequence.size() - 1) {
+                if (!rightContexts.containsKey(token)) {
+                    rightContexts.put(token, new HashSet<String>());
+                }
+                rightContexts.get(token).add(sequence.get(i + 1));
+            }
         }
     }
 
@@ -119,11 +146,19 @@ public class ContentFinder {
     Set<String> swapStructuralWords = detectSwapStructuralWords(positions, all, sequences);
 
     double maxMovementCount = 1.0;
+    double maxContextDiversity = 1.0;
     for (String token : all) {
         Set<Integer> poss = positions.get(token);
         int movementCount = (poss != null) ? poss.size() : 0;
         if (movementCount > maxMovementCount) {
             maxMovementCount = movementCount;
+        }
+
+        Set<String> left = leftContexts.get(token);
+        Set<String> right = rightContexts.get(token);
+        int contextDiversity = ((left != null) ? left.size() : 0) + ((right != null) ? right.size() : 0);
+        if (contextDiversity > maxContextDiversity) {
+            maxContextDiversity = contextDiversity;
         }
     }
 
@@ -131,9 +166,20 @@ public class ContentFinder {
     for (String token : all) {
         Set<Integer> poss = positions.get(token);
         int movementCount = (poss != null) ? poss.size() : 0;
-        double score = (maxMovementCount > 0) ? (movementCount / maxMovementCount) : 0.0;
+        double movementNorm = (maxMovementCount > 0) ? (movementCount / maxMovementCount) : 0.0;
 
-        double originalScore = score;
+        Set<String> left = leftContexts.get(token);
+        Set<String> right = rightContexts.get(token);
+        int contextDiversity = ((left != null) ? left.size() : 0) + ((right != null) ? right.size() : 0);
+        double contextNorm = (maxContextDiversity > 0) ? (contextDiversity / maxContextDiversity) : 0.0;
+
+        double entropyNorm = normalizedPositionEntropy(positionCounts.get(token));
+
+        double score = (0.50 * movementNorm) + (0.30 * contextNorm) + (0.20 * entropyNorm);
+
+        if (learnedStructurals != null && learnedStructurals.contains(token)) {
+            score *= 0.5;
+        }
 
         if (swapStructuralWords.contains(token)) {
             score *= 0.1;
@@ -141,16 +187,17 @@ public class ContentFinder {
             score *= 0.1;
         }
 
-        Scores.add(new Score(token, score));
+        Scores.add(new Score(token, movementNorm, contextNorm, entropyNorm, score));
     }
 
     Collections.sort(Scores);
+    double adaptiveThreshold = computeAdaptiveThreshold(Scores);
         
     // ========================================
 
     Set<String> contents = new LinkedHashSet<String>();
     for (Score ws : Scores) {
-        if (ws.movementScore >= MAX_SENSITIVITY) {
+        if (ws.movementScore >= adaptiveThreshold) {
             contents.add(ws.token);
         } else {
             break;
@@ -180,6 +227,56 @@ public class ContentFinder {
     }
 
     return contents;
+}
+
+private double normalizedPositionEntropy(Map<Integer, Integer> countsByPosition) {
+    if (countsByPosition == null || countsByPosition.size() <= 1) {
+        return 0.0;
+    }
+
+    double total = 0.0;
+    for (Integer count : countsByPosition.values()) {
+        total += count;
+    }
+    if (total <= 0.0) {
+        return 0.0;
+    }
+
+    double entropy = 0.0;
+    for (Integer count : countsByPosition.values()) {
+        if (count == null || count <= 0) continue;
+        double p = count / total;
+        entropy -= p * log2(p);
+    }
+
+    double maxEntropy = log2(countsByPosition.size());
+    if (maxEntropy <= 0.0) {
+        return 0.0;
+    }
+    return entropy / maxEntropy;
+}
+
+private double log2(double value) {
+    return Math.log(value) / Math.log(2.0);
+}
+
+private double computeAdaptiveThreshold(List<Score> scores) {
+    if (scores == null || scores.isEmpty()) {
+        return MAX_SENSITIVITY;
+    }
+
+    List<Double> values = new ArrayList<Double>();
+    for (Score s : scores) {
+        values.add(s.movementScore);
+    }
+    Collections.sort(values);
+
+    int idx = (int) Math.floor((values.size() - 1) * 0.5);
+    if (idx < 0) idx = 0;
+    if (idx >= values.size()) idx = values.size() - 1;
+
+    double median = values.get(idx);
+    return Math.max(MAX_SENSITIVITY, median);
 }
 
 /**
