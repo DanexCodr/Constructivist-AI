@@ -1,5 +1,6 @@
 package danexcodr.ai;
 
+import java.io.ByteArrayOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -51,7 +52,7 @@ public class Test {
 
     private static class EchoingInputStream extends InputStream {
         private final InputStream delegate;
-        private final StringBuilder lineBuffer = new StringBuilder();
+        private final ByteArrayOutputStream lineBuffer = new ByteArrayOutputStream();
         private int lineNumber = 0;
 
         EchoingInputStream(InputStream delegate) {
@@ -84,6 +85,7 @@ public class Test {
 
         @Override
         public void close() throws java.io.IOException {
+            flushPendingLine();
             delegate.close();
         }
 
@@ -95,21 +97,21 @@ public class Test {
                 emitCurrentLine();
                 return;
             }
-            lineBuffer.append((char) value);
+            lineBuffer.write(value);
         }
 
         private void emitCurrentLine() {
             lineNumber++;
-            String line = lineBuffer.toString();
+            String line = new String(lineBuffer.toByteArray(), StandardCharsets.UTF_8);
             if (line.length() == 0) {
                 line = "<empty>";
             }
             System.out.println("  [input " + lineNumber + "] " + line);
-            lineBuffer.setLength(0);
+            lineBuffer.reset();
         }
 
         private void flushPendingLine() {
-            if (lineBuffer.length() > 0) {
+            if (lineBuffer.size() > 0) {
                 emitCurrentLine();
             }
         }
