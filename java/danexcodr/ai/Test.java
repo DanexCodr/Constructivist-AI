@@ -73,10 +73,11 @@ public class Test {
         @Override
         public int read(byte[] b, int off, int len) throws java.io.IOException {
             if (b == null) {
-                throw new NullPointerException();
+                throw new NullPointerException("byte array must not be null");
             }
             if (off < 0 || len < 0 || len > b.length - off) {
-                throw new IndexOutOfBoundsException();
+                throw new IndexOutOfBoundsException(
+                    "Invalid offset/length: off=" + off + ", len=" + len + ", arrayLength=" + b.length);
             }
             if (len == 0) {
                 return 0;
@@ -111,6 +112,7 @@ public class Test {
             lineNumber++;
             String line = new String(lineBuffer.toByteArray(), StandardCharsets.UTF_8);
             if (line.length() == 0) {
+                // Make consumed blank input visible in the auto-run transcript.
                 line = "<empty>";
             }
             System.out.println("  [input " + lineNumber + "] " + line);
