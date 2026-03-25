@@ -48,6 +48,18 @@ public class Test {
                 "animal",
                 "q"
             };
+
+    private static void printScriptedInputs() {
+        System.out.println("Scripted input lines:");
+        for (int i = 0; i < inputLines.length; i++) {
+            String line = inputLines[i];
+            if (line.length() == 0) {
+                line = "<empty>";
+            }
+            System.out.println("  [" + (i + 1) + "] " + line);
+        }
+        System.out.println();
+    }
     
     public static void main(String[] args) throws Exception {
         System.out.println("--- Starting Constructivist AI Auto-Run ---\n");
@@ -65,6 +77,7 @@ public class Test {
             String inputSequence = inputBuilder.toString();
             
             System.out.println("Running with " + inputLines.length + " input lines...\n");
+            printScriptedInputs();
             
             // Redirect System.in to our input sequence
             System.setIn(new ByteArrayInputStream(inputSequence.getBytes(StandardCharsets.UTF_8)));
