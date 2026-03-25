@@ -59,7 +59,7 @@ public class PatternMatcher {
             PatternFamily family, 
             Set<String> protectedWords) {
         
-        for (StructuralPattern sp : family.getMemberPatterns()) {
+        for (Structure sp : family.getMemberPatterns()) {
             List<String> slots = sp.getStructuralSlots();
             for (int i = 0; i <= sequence.size() - slots.size(); i++) {
                 if (isSubSequenceMatch(sequence, i, slots, family, protectedWords)) {
@@ -72,7 +72,7 @@ public class PatternMatcher {
     
     // NEW: Method to check if sequence contains a PF token pattern
     public static boolean containsPatternFamily(List<String> sequence, PatternFamily family) {
-        for (StructuralPattern sp : family.getMemberPatterns()) {
+        for (Structure sp : family.getMemberPatterns()) {
             List<String> slots = sp.getStructuralSlots();
             // Check if sequence contains all slots (order doesn't matter for commutative)
             if (sp.isCommutative()) {

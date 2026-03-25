@@ -29,8 +29,8 @@ public class RelationFinder {
     public Set<String> findConnectors(String word) {
         Set<String> connectors = new HashSet<String>();
         
-        List<RelationPattern> patterns = patternProcessor.findAllRelationPatternsWithTerm(word);
-        for (RelationPattern rp : patterns) {
+        List<Content> patterns = patternProcessor.findAllContentsWithTerm(word);
+        for (Content rp : patterns) {
             if (rp.getT1().equals(word)) {
                 connectors.add(rp.getT2());
             } else if (rp.getT2().equals(word)) {
@@ -65,7 +65,7 @@ public class RelationFinder {
             Set<String> neighbors = findConnectors(lastNode);
             for (String neighbor : neighbors) {
                 if (!visited.contains(neighbor)) {
-                    List<RelationPattern> relations = patternProcessor.findAllRelationPatterns(lastNode, neighbor);
+                    List<Content> relations = patternProcessor.findAllContents(lastNode, neighbor);
                     boolean relationFound = !relations.isEmpty();
                     
                     if (relationFound) {
@@ -88,13 +88,13 @@ public class RelationFinder {
         commonConnectors.retainAll(connectors2);
 
         for (String common : commonConnectors) {
-            List<RelationPattern> t1ToCommons = patternProcessor.findAllRelationPatterns(term1, common);
-            List<RelationPattern> t2ToCommons = patternProcessor.findAllRelationPatterns(term2, common);
+            List<Content> t1ToCommons = patternProcessor.findAllContents(term1, common);
+            List<Content> t2ToCommons = patternProcessor.findAllContents(term2, common);
 
             if (!t1ToCommons.isEmpty() && !t2ToCommons.isEmpty()) {
-                List<RelationPattern> directRelations = patternProcessor.findAllRelationPatterns(term1, term2);
+                List<Content> directRelations = patternProcessor.findAllContents(term1, term2);
                 if (directRelations.isEmpty()) {
-                    directRelations = patternProcessor.findAllRelationPatterns(term2, term1);
+                    directRelations = patternProcessor.findAllContents(term2, term1);
                 }
                 
                 if (directRelations.isEmpty()) {

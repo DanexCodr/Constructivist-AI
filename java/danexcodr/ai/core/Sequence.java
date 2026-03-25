@@ -41,7 +41,7 @@ public class Sequence {
         return family;
     }
 
-    private PatternFamily getFamilyForRelation(RelationPattern relation) {
+    private PatternFamily getFamilyForRelation(Content relation) {
         if (relation.getFamilyId() != null && familyManager != null) {
             PatternFamily family = familyManager.getFamilyById(relation.getFamilyId());
             return getFreshFamily(family);
@@ -54,8 +54,8 @@ public class Sequence {
         boolean foundNonLogicalDirectRelation = false;
 
         // 1. Check for direct relations
-        List<RelationPattern> directRelations = patternProcessor.findAllRelationPatterns(T1, T2);
-        for (RelationPattern directRelation : directRelations) {
+        List<Content> directRelations = patternProcessor.findAllContents(T1, T2);
+        for (Content directRelation : directRelations) {
             PatternFamily family = getFamilyForRelation(directRelation);
             
             if (family != null) {
@@ -67,8 +67,8 @@ public class Sequence {
         }
 
         // 2. Check for reverse relations
-        List<RelationPattern> reverseRelations = patternProcessor.findAllRelationPatterns(T2, T1);
-        for (RelationPattern reverseRelation : reverseRelations) {
+        List<Content> reverseRelations = patternProcessor.findAllContents(T2, T1);
+        for (Content reverseRelation : reverseRelations) {
             PatternFamily family = getFamilyForRelation(reverseRelation);
             
             if (family != null) {
@@ -102,22 +102,22 @@ public class Sequence {
         // RESTORED: Proper transitive inference logic from old version
         for (String commonConnector : commonConnectors) {
             // Get all possible first leg relations
-            List<RelationPattern> T1toCommon = patternProcessor.findAllRelationPatterns(T1, commonConnector);
-            List<RelationPattern> commonToT1 = patternProcessor.findAllRelationPatterns(commonConnector, T1);
-            List<RelationPattern> firstLegs = new ArrayList<RelationPattern>();
+            List<Content> T1toCommon = patternProcessor.findAllContents(T1, commonConnector);
+            List<Content> commonToT1 = patternProcessor.findAllContents(commonConnector, T1);
+            List<Content> firstLegs = new ArrayList<Content>();
             firstLegs.addAll(T1toCommon);
             firstLegs.addAll(commonToT1);
             
             // Get all possible second leg relations  
-            List<RelationPattern> commonToT2 = patternProcessor.findAllRelationPatterns(commonConnector, T2);
-            List<RelationPattern> T2toCommon = patternProcessor.findAllRelationPatterns(T2, commonConnector);
-            List<RelationPattern> secondLegs = new ArrayList<RelationPattern>();
+            List<Content> commonToT2 = patternProcessor.findAllContents(commonConnector, T2);
+            List<Content> T2toCommon = patternProcessor.findAllContents(T2, commonConnector);
+            List<Content> secondLegs = new ArrayList<Content>();
             secondLegs.addAll(commonToT2);
             secondLegs.addAll(T2toCommon);
             
             if (!firstLegs.isEmpty() && !secondLegs.isEmpty()) {
-                for (RelationPattern firstLeg : firstLegs) {
-                    for (RelationPattern secondLeg : secondLegs) {
+                for (Content firstLeg : firstLegs) {
+                    for (Content secondLeg : secondLegs) {
                         PatternFamily family1 = getFamilyForRelation(firstLeg);
                         PatternFamily family2 = getFamilyForRelation(secondLeg);
                         
@@ -172,8 +172,8 @@ public class Sequence {
         // 4. RESTORED: Commutative Bridges (parent bridge detection from old version)
         Set<String> parents1 = new HashSet<String>();
         for (String conn : relationFinder.findConnectors(T1)) {
-            List<RelationPattern> rps = patternProcessor.findAllRelationPatterns(T1, conn);
-            for (RelationPattern rp : rps) {
+            List<Content> rps = patternProcessor.findAllContents(T1, conn);
+            for (Content rp : rps) {
                 if (rp.getT2().equals(conn) && !rp.isCommutative()) {
                     parents1.add(conn);
                 }
@@ -182,8 +182,8 @@ public class Sequence {
 
         Set<String> parents2 = new HashSet<String>();
         for (String conn : relationFinder.findConnectors(T2)) {
-            List<RelationPattern> rps = patternProcessor.findAllRelationPatterns(T2, conn);
-            for (RelationPattern rp : rps) {
+            List<Content> rps = patternProcessor.findAllContents(T2, conn);
+            for (Content rp : rps) {
                 if (rp.getT2().equals(conn) && !rp.isCommutative()) {
                     parents2.add(conn);
                 }
@@ -192,10 +192,10 @@ public class Sequence {
 
         for (String p1 : parents1) {
             for (String p2 : parents2) {
-                List<RelationPattern> bridges = patternProcessor.findAllRelationPatterns(p1, p2);
-                if (bridges.isEmpty()) bridges = patternProcessor.findAllRelationPatterns(p2, p1);
+                List<Content> bridges = patternProcessor.findAllContents(p1, p2);
+                if (bridges.isEmpty()) bridges = patternProcessor.findAllContents(p2, p1);
 
-                for (RelationPattern bridge : bridges) {
+                for (Content bridge : bridges) {
                     PatternFamily family = getFamilyForRelation(bridge);
                     
                     if (family != null && bridge.isCommutative()) {
@@ -226,12 +226,12 @@ public class Sequence {
                         }
                         
                         // Try to find relation between these nodes
-                        List<RelationPattern> relations = patternProcessor.findAllRelationPatterns(node1, node2);
+                        List<Content> relations = patternProcessor.findAllContents(node1, node2);
                         if (relations.isEmpty()) {
-                            relations = patternProcessor.findAllRelationPatterns(node2, node1);
+                            relations = patternProcessor.findAllContents(node2, node1);
                         }
                         
-                        for (RelationPattern relation : relations) {
+                        for (Content relation : relations) {
                             PatternFamily family = getFamilyForRelation(relation);
                             
                             if (family != null) {
@@ -246,17 +246,17 @@ public class Sequence {
                 
                 // Original logic (for backward compatibility)
                 String firstHopNode = path.get(1);
-                List<RelationPattern> firstLegs = patternProcessor.findAllRelationPatterns(T1, firstHopNode);
-                if (firstLegs.isEmpty()) firstLegs = patternProcessor.findAllRelationPatterns(firstHopNode, T1);
+                List<Content> firstLegs = patternProcessor.findAllContents(T1, firstHopNode);
+                if (firstLegs.isEmpty()) firstLegs = patternProcessor.findAllContents(firstHopNode, T1);
 
                 String lastHopNode = path.get(path.size() - 2);
-                List<RelationPattern> lastLegs = patternProcessor.findAllRelationPatterns(lastHopNode, T2);
-                if (lastLegs.isEmpty()) lastLegs = patternProcessor.findAllRelationPatterns(T2, lastHopNode);
+                List<Content> lastLegs = patternProcessor.findAllContents(lastHopNode, T2);
+                if (lastLegs.isEmpty()) lastLegs = patternProcessor.findAllContents(T2, lastHopNode);
 
                 if (!firstLegs.isEmpty() && !lastLegs.isEmpty()) {
                     // Try each combination of first and last leg
-                    for (RelationPattern firstLeg : firstLegs) {
-                        for (RelationPattern lastLeg : lastLegs) {
+                    for (Content firstLeg : firstLegs) {
+                        for (Content lastLeg : lastLegs) {
                             PatternFamily family1 = getFamilyForRelation(firstLeg);
                             PatternFamily family2 = getFamilyForRelation(lastLeg);
                             
@@ -320,7 +320,7 @@ public class Sequence {
         Map<String, Set<String>> aliases = family.getAliases();
         Map<String, String> wordToAlias = family.getWordToAlias();
         
-        for (StructuralPattern sp : family.getMemberPatterns()) {
+        for (Structure sp : family.getMemberPatterns()) {
             if (sp.isCommutative() != useCommutative) {
                 continue;
             }

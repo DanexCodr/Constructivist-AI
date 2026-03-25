@@ -10,7 +10,7 @@ public class PatternFamilyManager {
     private List<PatternFamily> cachedFamilies;
     private Map<String, PatternFamily> familyById = new HashMap<String, PatternFamily>();
     private boolean familiesDirty = true; // NEW: Manage dirty flag internally
-    private List<StructuralPattern> allTemporaryPatterns = new ArrayList<StructuralPattern>(); // NEW: Store all temp patterns
+    private List<Structure> allTemporaryPatterns = new ArrayList<Structure>(); // NEW: Store all temp patterns
 
     public PatternFamilyManager(List<Pattern> allPatterns, List<PatternFamily> cachedFamilies) {
         this.allPatterns = allPatterns;
@@ -18,26 +18,32 @@ public class PatternFamilyManager {
         updateFamilyMap();
     }
 
+    // CHANGED: Removed familiesDirty parameter
     public List<PatternFamily> getPatternFamilies(Map<String, Set<String>> structuralEquivalents, 
                                                      PatternFamilyBuilder familyBuilder) {
         if (familiesDirty || cachedFamilies == null) {
-            // Always create a fresh builder so patterns are never counted more than once.
-            // The shared familyBuilder passed in already has patterns added by PatternProcessor;
-            // reusing it would duplicate every pattern in allTemporaryPatterns and inflate
-            // family frequency counters exponentially on each rebuild.
-            PatternFamilyBuilder freshBuilder = new PatternFamilyBuilder(structuralEquivalents);
-            for (StructuralPattern pattern : allTemporaryPatterns) {
-                freshBuilder.addPattern(pattern);
+            // CHANGED: Build families from all accumulated patterns
+            PatternFamilyBuilder builderToUse;
+            if (familyBuilder != null) {
+                builderToUse = familyBuilder;
+            } else {
+                builderToUse = new PatternFamilyBuilder(structuralEquivalents);
             }
-            cachedFamilies = freshBuilder.buildPatternFamilies();
+            
+            // Add ALL accumulated patterns to builder
+            for (Structure pattern : allTemporaryPatterns) {
+                builderToUse.addPattern(pattern);
+            }
+            
+            cachedFamilies = builderToUse.buildPatternFamilies();
             updateFamilyMap();
-            familiesDirty = false;
+            familiesDirty = false; // NEW: Reset internal flag
         }
         return cachedFamilies;
     }
     
     // NEW: Update families with temporary structural patterns
-    public void updateFamiliesWithPatterns(List<StructuralPattern> tempPatterns, 
+    public void updateFamiliesWithPatterns(List<Structure> tempPatterns, 
                                           Map<String, Set<String>> structuralEquivalents) {
         if (tempPatterns.isEmpty()) return;
         

@@ -17,13 +17,13 @@ public class PatternProcessor {
   private Map<String, Set<String>> structuralEquivalents;
   
   private Set<String> learnedOptionalWords = new HashSet<String>();
-  private List<Pattern> allPatterns; // Now only contains RelationPatterns
+  private List<Pattern> allPatterns; // Now only contains Contents
 
   boolean familiesDirty;
   
-  private Map<String, List<RelationPattern>> relationPatternsByT1 = new HashMap<String, List<RelationPattern>>();
-  private Map<String, List<RelationPattern>> relationPatternsByT2 = new HashMap<String, List<RelationPattern>>();
-  private Map<String, RelationPattern> relationPatternsByKey = new HashMap<String, RelationPattern>();
+  private Map<String, List<Content>> relationPatternsByT1 = new HashMap<String, List<Content>>();
+  private Map<String, List<Content>> relationPatternsByT2 = new HashMap<String, List<Content>>();
+  private Map<String, Content> relationPatternsByKey = new HashMap<String, Content>();
 
   public PatternProcessor(
       SymbolManager symbolManager,
@@ -47,21 +47,21 @@ public class PatternProcessor {
 
   private void initializeRelationMaps() {
     for (Pattern pattern : allPatterns) {
-        if (pattern instanceof RelationPattern) {
-            RelationPattern rp = (RelationPattern) pattern;
+        if (pattern instanceof Content) {
+            Content rp = (Content) pattern;
             addToRelationMaps(rp);
         }
     }
   }
   
-  private void addToRelationMaps(RelationPattern rp) {
+  private void addToRelationMaps(Content rp) {
     if (!relationPatternsByT1.containsKey(rp.getT1())) {
-        relationPatternsByT1.put(rp.getT1(), new ArrayList<RelationPattern>());
+        relationPatternsByT1.put(rp.getT1(), new ArrayList<Content>());
     }
     relationPatternsByT1.get(rp.getT1()).add(rp);
     
     if (!relationPatternsByT2.containsKey(rp.getT2())) {
-        relationPatternsByT2.put(rp.getT2(), new ArrayList<RelationPattern>());
+        relationPatternsByT2.put(rp.getT2(), new ArrayList<Content>());
     }
     relationPatternsByT2.get(rp.getT2()).add(rp);
     
@@ -74,8 +74,8 @@ public class PatternProcessor {
     }
   }
   
-  private void removeFromRelationMaps(RelationPattern rp) {
-    List<RelationPattern> t1List = relationPatternsByT1.get(rp.getT1());
+  private void removeFromRelationMaps(Content rp) {
+    List<Content> t1List = relationPatternsByT1.get(rp.getT1());
     if (t1List != null) {
         t1List.remove(rp);
         if (t1List.isEmpty()) {
@@ -83,7 +83,7 @@ public class PatternProcessor {
         }
     }
     
-    List<RelationPattern> t2List = relationPatternsByT2.get(rp.getT2());
+    List<Content> t2List = relationPatternsByT2.get(rp.getT2());
     if (t2List != null) {
         t2List.remove(rp);
         if (t2List.isEmpty()) {
@@ -108,27 +108,27 @@ public class PatternProcessor {
     this.equivalenceDetector = equivalenceDetector;
   }
 
-  public List<RelationPattern> findAllRelationPatterns(String term1, String term2) {
-    List<RelationPattern> results = new ArrayList<RelationPattern>();
+  public List<Content> findAllContents(String term1, String term2) {
+    List<Content> results = new ArrayList<Content>();
     
     String directKey = term1 + "|" + term2;
-    RelationPattern directPattern = relationPatternsByKey.get(directKey);
+    Content directPattern = relationPatternsByKey.get(directKey);
     if (directPattern != null) {
         results.add(directPattern);
     }
     
-    List<RelationPattern> fromT1 = relationPatternsByT1.get(term1);
+    List<Content> fromT1 = relationPatternsByT1.get(term1);
     if (fromT1 != null) {
-        for (RelationPattern rp : fromT1) {
+        for (Content rp : fromT1) {
             if (rp.getT2().equals(term2) && !results.contains(rp)) {
                 results.add(rp);
             }
         }
     }
     
-    List<RelationPattern> fromT2 = relationPatternsByT2.get(term2);
+    List<Content> fromT2 = relationPatternsByT2.get(term2);
     if (fromT2 != null) {
-        for (RelationPattern rp : fromT2) {
+        for (Content rp : fromT2) {
             if (rp.getT1().equals(term1) && rp.isCommutative() && !results.contains(rp)) {
                 results.add(rp);
             }
@@ -138,17 +138,17 @@ public class PatternProcessor {
     return results;
   }
 
-  public List<RelationPattern> findAllRelationPatternsWithTerm(String term) {
-    List<RelationPattern> results = new ArrayList<RelationPattern>();
+  public List<Content> findAllContentsWithTerm(String term) {
+    List<Content> results = new ArrayList<Content>();
     
-    List<RelationPattern> fromTerm = relationPatternsByT1.get(term);
+    List<Content> fromTerm = relationPatternsByT1.get(term);
     if (fromTerm != null) {
         results.addAll(fromTerm);
     }
     
-    List<RelationPattern> toTerm = relationPatternsByT2.get(term);
+    List<Content> toTerm = relationPatternsByT2.get(term);
     if (toTerm != null) {
-        for (RelationPattern rp : toTerm) {
+        for (Content rp : toTerm) {
             if (!results.contains(rp)) {
                 results.add(rp);
             }
@@ -158,9 +158,9 @@ public class PatternProcessor {
     return results;
   }
 
-  public RelationPattern findRelationPattern(String term1, String term2, PatternFamily family) {
+  public Content findContent(String term1, String term2, PatternFamily family) {
     String key = term1 + "|" + term2;
-    RelationPattern rp = relationPatternsByKey.get(key);
+    Content rp = relationPatternsByKey.get(key);
     
     if (rp != null) {
         if (family == null || (rp.getFamilyId() != null && rp.getFamilyId().equals(family.getId()))) {
@@ -180,13 +180,13 @@ public class PatternProcessor {
     return null;
   }
 
-  public RelationPattern findRelationPattern(String term1, String term2) {
-    return findRelationPattern(term1, term2, null);
+  public Content findContent(String term1, String term2) {
+    return findContent(term1, term2, null);
   }
   
-  public RelationPattern getFamilyForRelation(String term1, String term2) {
+  public Content getFamilyForRelation(String term1, String term2) {
     String key = term1 + "|" + term2;
-    RelationPattern rp = relationPatternsByKey.get(key);
+    Content rp = relationPatternsByKey.get(key);
     if (rp != null && rp.getFamilyId() != null) {
         return rp;
     }
@@ -311,7 +311,7 @@ public class PatternProcessor {
     String[] positionalTerms = determinePositionalTerms(preliminaryTerms[0], preliminaryTerms[1], equivalentSequences);
     
     // CHANGED: Extract structural patterns first (temporary)
-    List<StructuralPattern> tempPatterns = extractStructuralPatterns(equivalentSequences, positionalTerms[0], positionalTerms[1]);
+    List<Structure> tempPatterns = extractStructures(equivalentSequences, positionalTerms[0], positionalTerms[1]);
     
     // Use cached allPatterns for equivalence detection
     Set<StructuralEquivalenceDetector.EquivalencePair> newPairs = 
@@ -354,7 +354,7 @@ public class PatternProcessor {
     String[] finalPositionalTerms = determinePositionalTerms(finalTerms[0], finalTerms[1], equivalentSequences);
     
     // CHANGED: Extract patterns again with final terms
-    tempPatterns = extractStructuralPatterns(equivalentSequences, finalPositionalTerms[0], finalPositionalTerms[1]);
+    tempPatterns = extractStructures(equivalentSequences, finalPositionalTerms[0], finalPositionalTerms[1]);
     
     // CHANGED: Update families with temporary patterns
     updateFamiliesWithPatterns(tempPatterns, finalPositionalTerms[0], finalPositionalTerms[1]);
@@ -409,7 +409,7 @@ public class PatternProcessor {
     PatternFamily patternFamily = null;
     
     for (PatternFamily family : families) {
-        for (StructuralPattern sp : family.getMemberPatterns()) {
+        for (Structure sp : family.getMemberPatterns()) {
             if (!equivalentSequences.isEmpty()) {
                 List<String> exampleSeq = equivalentSequences.get(0);
                 List<String> abstractPattern = SequenceTransformer.abstractSequencePF(
@@ -452,10 +452,10 @@ public class PatternProcessor {
         if (patternFamily != null) break;
     }
 
-    RelationPattern pattern = findOrCreatePatternForFamily(
+    Content pattern = findOrCreatePatternForFamily(
         finalPositionalTerms[0], finalPositionalTerms[1], patternFamily, isCommutative);
         
-    pattern.incrementFrequency();
+    pattern.setFrequency(pattern.getFrequency() + equivalentSequences.size());
     for (List<String> seq : equivalentSequences) {
         pattern.addConcreteExample(new ArrayList<String>(seq));
     }
@@ -465,9 +465,9 @@ public class PatternProcessor {
     addToRelationMaps(pattern);
 
     if (isCommutative) {
-        RelationPattern reversePattern = findOrCreatePatternForFamily(
+        Content reversePattern = findOrCreatePatternForFamily(
             finalPositionalTerms[1], finalPositionalTerms[0], patternFamily, isCommutative);
-        reversePattern.incrementFrequency();
+        reversePattern.setFrequency(reversePattern.getFrequency() + equivalentSequences.size());
         for (List<String> seq : equivalentSequences) {
             reversePattern.addConcreteExample(new ArrayList<String>(seq));
         }
@@ -487,8 +487,8 @@ public class PatternProcessor {
     families = patternFamilyManager.getPatternFamilies(structuralEquivalents, patternFamilyBuilder);
 
     for (Pattern p : allPatterns) {
-        if (!(p instanceof RelationPattern)) continue;
-        RelationPattern rp = (RelationPattern) p;
+        if (!(p instanceof Content)) continue;
+        Content rp = (Content) p;
         
         if (rp.getFamilyId() != null) continue;
         
@@ -504,7 +504,7 @@ public class PatternProcessor {
                 List<String> abstractPattern = SequenceTransformer.abstractSequencePF(seq, rp.getT1(), rp.getT2());
                 List<String> flippedPattern = SequenceTransformer.flipTermPatternWithTerms(abstractPattern, rp.getT1(), rp.getT2());
                 
-                for (StructuralPattern sp : family.getMemberPatterns()) {
+                for (Structure sp : family.getMemberPatterns()) {
                     if (familyAssigned) break;
                     
                     boolean matchesNormal = sp.getStructuralSlots().equals(abstractPattern);
@@ -571,7 +571,7 @@ public class PatternProcessor {
         structuralEquivalents, patternFamilyBuilder);
     
     for (PatternFamily family : families) {
-        for (StructuralPattern sp : family.getMemberPatterns()) {
+        for (Structure sp : family.getMemberPatterns()) {
             patternsForDetection.add(sp);
         }
     }
@@ -580,7 +580,7 @@ public class PatternProcessor {
   }
 
   // NEW: Update families with temporary patterns
-  private void updateFamiliesWithPatterns(List<StructuralPattern> tempPatterns, String term1, String term2) {
+  private void updateFamiliesWithPatterns(List<Structure> tempPatterns, String term1, String term2) {
     if (tempPatterns.isEmpty()) return;
     
     familiesDirty = true;
@@ -595,13 +595,13 @@ public class PatternProcessor {
     familiesDirty = true;
   }
 
-  private RelationPattern findOrCreatePatternForFamily(String term1, String term2, PatternFamily family, boolean isCommutative) {
+  private Content findOrCreatePatternForFamily(String term1, String term2, PatternFamily family, boolean isCommutative) {
     if (family == null) {
         return findOrCreatePattern(term1, term2);
     }
     
     String key = term1 + "|" + term2;
-    RelationPattern existing = relationPatternsByKey.get(key);
+    Content existing = relationPatternsByKey.get(key);
     
     if (existing != null) {
         if (family == null || (existing.getFamilyId() != null && existing.getFamilyId().equals(family.getId()))) {
@@ -621,9 +621,10 @@ public class PatternProcessor {
         }
     }
     
-    RelationPattern newPattern = new RelationPattern("RP" + allPatterns.size(), term1, term2);
+    Content newPattern = new Content("RP" + allPatterns.size(), term1, term2);
     newPattern.setFamily(family);
     newPattern.setCommutative(isCommutative);
+    newPattern.setFrequency(0);
     allPatterns.add(newPattern);
     addToRelationMaps(newPattern);
     familiesDirty = true;
@@ -631,9 +632,9 @@ public class PatternProcessor {
     return newPattern;
   }
 
-  private RelationPattern findOrCreatePattern(String term1, String term2) {
+  private Content findOrCreatePattern(String term1, String term2) {
     String key = term1 + "|" + term2;
-    RelationPattern existing = relationPatternsByKey.get(key);
+    Content existing = relationPatternsByKey.get(key);
     
     if (existing != null) {
         existing.updateTimestamp();
@@ -647,7 +648,8 @@ public class PatternProcessor {
         return existing;
     }
     
-    RelationPattern newPattern = new RelationPattern("RP" + allPatterns.size(), term1, term2);
+    Content newPattern = new Content("RP" + allPatterns.size(), term1, term2);
+    newPattern.setFrequency(0);
     allPatterns.add(newPattern);
     addToRelationMaps(newPattern);
     familiesDirty = true;
@@ -696,7 +698,7 @@ public class PatternProcessor {
           boolean matchedSequence = false;
           for (PatternFamily family : families) {
               if (matchedSequence) break;
-              for (StructuralPattern sp : family.getMemberPatterns()) {
+              for (Structure sp : family.getMemberPatterns()) {
                   List<String> slots = sp.getStructuralSlots();
                   if (sequence.size() != slots.size()) continue;
                   if (PatternMatcher.isSubSequenceMatch(sequence, 0, slots, family, new HashSet<String>())) {
@@ -737,8 +739,8 @@ public class PatternProcessor {
     Set<String> baseTerms = new HashSet<String>();
     if (targetFamily != null) {
         for (Pattern p : allPatterns) {
-            if (p instanceof RelationPattern) {
-                RelationPattern rp = (RelationPattern) p;
+            if (p instanceof Content) {
+                Content rp = (Content) p;
                 if (rp.getFamilyId() != null && rp.getFamilyId().equals(token)) {
                     baseTerms.add(rp.getT1()); baseTerms.add(rp.getT2());
                 }
@@ -809,7 +811,7 @@ public class PatternProcessor {
   }
 
   // CHANGED: Return temporary patterns instead of storing in allPatterns
-  private List<StructuralPattern> extractStructuralPatterns(List<List<String>> equivalentSequences, String term1, String term2) {
+  private List<Structure> extractStructures(List<List<String>> equivalentSequences, String term1, String term2) {
     Map<List<String>, Integer> patternCounts = new HashMap<List<String>, Integer>();
     for (List<String> sequence : equivalentSequences) {
       List<String> abstractPattern = SequenceTransformer.abstractSequencePF(sequence, term1, term2);
@@ -818,14 +820,23 @@ public class PatternProcessor {
     
     boolean isCommutative = isCommutative(equivalentSequences, term1, term2);
     
-    List<StructuralPattern> tempPatterns = new ArrayList<StructuralPattern>();
+    List<Structure> tempPatterns = new ArrayList<Structure>();
     
     for (Entry<List<String>, Integer> entry : patternCounts.entrySet()) {
       List<String> finalSlots = PatternSlotFiller.createFinalPatternSlots(entry.getKey(), term1, term2, isCommutative);
-      StructuralPattern newPattern = new StructuralPattern("TEMP", finalSlots);
-      newPattern.setFrequency(entry.getValue());
+      Structure newPattern = new Structure("TEMP", finalSlots);
+      newPattern.setFrequency(1);
       newPattern.setCommutative(isCommutative);
-      tempPatterns.add(newPattern); // Temporary, not added to allPatterns
+      
+      // Add concrete examples to track actual occurrences
+      for (List<String> sequence : equivalentSequences) {
+        List<String> abstractSeq = SequenceTransformer.abstractSequencePF(sequence, term1, term2);
+        if (abstractSeq.equals(entry.getKey())) {
+          newPattern.addConcreteExample(sequence);
+        }
+      }
+      
+      tempPatterns.add(newPattern);
     }
     
     return tempPatterns;
@@ -851,7 +862,7 @@ public class PatternProcessor {
     List<PatternFamily> families = patternFamilyManager.getPatternFamilies(structuralEquivalents, patternFamilyBuilder);
     
     for (PatternFamily family : families) {
-        for (StructuralPattern sp : family.getMemberPatterns()) {
+        for (Structure sp : family.getMemberPatterns()) {
             for (String word : sp.getStructuralSlots()) {
                 if (!word.equals("[1]") && !word.equals("[2]") && 
                     !word.equals("[C]") && !word.equals("[X]") && 
@@ -915,7 +926,7 @@ public class PatternProcessor {
         int bestMatchStart = -1, bestMatchLength = -1;
         String bestFamilyId = null;
         for (PatternFamily family : families) {
-            for (StructuralPattern sp : family.getMemberPatterns()) {
+            for (Structure sp : family.getMemberPatterns()) {
                 List<String> slots = sp.getStructuralSlots();
                 for (int i = 0; i <= currentSequence.size() - slots.size(); i++) {
                      if (PatternMatcher.isSubSequenceMatch(currentSequence, i, slots, family, protectedWords)) {
@@ -943,7 +954,7 @@ public class PatternProcessor {
         if (token.startsWith("PF")) {
             for (PatternFamily f : families) {
                 if (f.getId().equals(token)) {
-                    for (StructuralPattern sp : f.getMemberPatterns()) if (sp.isCommutative()) return true;
+                    for (Structure sp : f.getMemberPatterns()) if (sp.isCommutative()) return true;
                 }
             }
         }
