@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+  <rect width="1200" height="700" fill="#0b1020"/>
+  <text x="600" y="50" font-size="34" fill="#e5e7eb" text-anchor="middle" font-family="Arial">Constructivist AI — Current Architecture (2026)</text>
+
+  <rect x="60" y="110" width="240" height="120" rx="12" fill="#1f2937" stroke="#60a5fa"/>
+  <text x="180" y="155" font-size="22" fill="#dbeafe" text-anchor="middle" font-family="Arial">Input Sentences</text>
+  <text x="180" y="185" font-size="16" fill="#93c5fd" text-anchor="middle" font-family="Arial">[l] learn / [p] process</text>
+
+  <rect x="360" y="80" width="300" height="180" rx="12" fill="#1f2937" stroke="#34d399"/>
+  <text x="510" y="120" font-size="22" fill="#d1fae5" text-anchor="middle" font-family="Arial">Pattern Learning</text>
+  <text x="510" y="150" font-size="16" fill="#a7f3d0" text-anchor="middle" font-family="Arial">Unsupervised clustering</text>
+  <text x="510" y="175" font-size="16" fill="#a7f3d0" text-anchor="middle" font-family="Arial">Pattern families (PF#)</text>
+  <text x="510" y="200" font-size="16" fill="#a7f3d0" text-anchor="middle" font-family="Arial">Structural equivalents</text>
+  <text x="510" y="225" font-size="16" fill="#a7f3d0" text-anchor="middle" font-family="Arial">Commutativity + optionals</text>
+
+  <rect x="720" y="110" width="420" height="120" rx="12" fill="#1f2937" stroke="#f59e0b"/>
+  <text x="930" y="155" font-size="22" fill="#fef3c7" text-anchor="middle" font-family="Arial">Knowledge State</text>
+  <text x="930" y="185" font-size="16" fill="#fde68a" text-anchor="middle" font-family="Arial">Symbols, contexts, patterns, families, relations</text>
+
+  <rect x="210" y="330" width="300" height="180" rx="12" fill="#1f2937" stroke="#c084fc"/>
+  <text x="360" y="370" font-size="22" fill="#f3e8ff" text-anchor="middle" font-family="Arial">[a] Analyze</text>
+  <text x="360" y="400" font-size="16" fill="#e9d5ff" text-anchor="middle" font-family="Arial">Infer candidate sequences</text>
+  <text x="360" y="425" font-size="16" fill="#e9d5ff" text-anchor="middle" font-family="Arial">without output normalization</text>
+  <text x="360" y="450" font-size="16" fill="#e9d5ff" text-anchor="middle" font-family="Arial">(diagnostic breadth)</text>
+
+  <rect x="600" y="330" width="420" height="180" rx="12" fill="#1f2937" stroke="#f472b6"/>
+  <text x="810" y="370" font-size="22" fill="#fce7f3" text-anchor="middle" font-family="Arial">[g] Generate</text>
+  <text x="810" y="400" font-size="16" fill="#fbcfe8" text-anchor="middle" font-family="Arial">Infer + rank by structural context</text>
+  <text x="810" y="425" font-size="16" fill="#fbcfe8" text-anchor="middle" font-family="Arial">Normalize structural equivalents using learned</text>
+  <text x="810" y="450" font-size="16" fill="#fbcfe8" text-anchor="middle" font-family="Arial">left/right neighbor frequencies (no hardcoded words)</text>
+
+  <rect x="430" y="560" width="360" height="90" rx="12" fill="#1f2937" stroke="#22d3ee"/>
+  <text x="610" y="600" font-size="20" fill="#cffafe" text-anchor="middle" font-family="Arial">[v] View</text>
+  <text x="610" y="625" font-size="15" fill="#a5f3fc" text-anchor="middle" font-family="Arial">Inspect full transparent knowledge state</text>
+
+  <line x1="300" y1="170" x2="360" y2="170" stroke="#94a3b8" stroke-width="3"/>
+  <line x1="660" y1="170" x2="720" y2="170" stroke="#94a3b8" stroke-width="3"/>
+  <line x1="930" y1="230" x2="930" y2="300" stroke="#94a3b8" stroke-width="3"/>
+  <line x1="930" y1="300" x2="360" y2="330" stroke="#94a3b8" stroke-width="3"/>
+  <line x1="930" y1="300" x2="810" y2="330" stroke="#94a3b8" stroke-width="3"/>
+  <line x1="510" y1="260" x2="510" y2="300" stroke="#94a3b8" stroke-width="3"/>
+  <line x1="510" y1="300" x2="810" y2="330" stroke="#94a3b8" stroke-width="3"/>
+  <line x1="510" y1="300" x2="360" y2="330" stroke="#94a3b8" stroke-width="3"/>
+  <line x1="510" y1="510" x2="520" y2="560" stroke="#94a3b8" stroke-width="3"/>
+  <line x1="810" y1="510" x2="700" y2="560" stroke="#94a3b8" stroke-width="3"/>
+</svg>

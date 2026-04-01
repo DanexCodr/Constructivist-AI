@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420">
+  <rect width="1200" height="420" fill="#111827"/>
+  <text x="600" y="45" font-size="30" fill="#f9fafb" text-anchor="middle" font-family="Arial">Analyze vs Generate — Output Path</text>
+
+  <rect x="60" y="130" width="220" height="90" rx="10" fill="#1f2937" stroke="#60a5fa"/>
+  <text x="170" y="180" font-size="18" fill="#dbeafe" text-anchor="middle" font-family="Arial">Infer candidates</text>
+
+  <rect x="360" y="80" width="300" height="90" rx="10" fill="#1f2937" stroke="#c084fc"/>
+  <text x="510" y="132" font-size="18" fill="#f3e8ff" text-anchor="middle" font-family="Arial">[a] analyze: raw alternatives</text>
+
+  <rect x="360" y="230" width="300" height="90" rx="10" fill="#1f2937" stroke="#f472b6"/>
+  <text x="510" y="270" font-size="17" fill="#fce7f3" text-anchor="middle" font-family="Arial">[g] generate: context-ranked</text>
+  <text x="510" y="295" font-size="14" fill="#fbcfe8" text-anchor="middle" font-family="Arial">+ structural-equivalent normalization</text>
+
+  <rect x="760" y="230" width="360" height="90" rx="10" fill="#1f2937" stroke="#34d399"/>
+  <text x="940" y="270" font-size="16" fill="#d1fae5" text-anchor="middle" font-family="Arial">Choose equivalent by learned</text>
+  <text x="940" y="295" font-size="16" fill="#d1fae5" text-anchor="middle" font-family="Arial">left/right context frequencies</text>
+
+  <line x1="280" y1="175" x2="360" y2="125" stroke="#94a3b8" stroke-width="3"/>
+  <line x1="280" y1="175" x2="360" y2="275" stroke="#94a3b8" stroke-width="3"/>
+  <line x1="660" y1="275" x2="760" y2="275" stroke="#94a3b8" stroke-width="3"/>
+
+  <text x="600" y="375" font-size="16" fill="#9ca3af" text-anchor="middle" font-family="Arial">No hardcoded article/word heuristics in generation normalization.</text>
+</svg>
