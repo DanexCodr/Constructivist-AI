@@ -5,6 +5,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.io.PrintStream;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Auto-runs the Main AI with the exact flow from the example.
@@ -38,52 +41,7 @@ public class Test {
         "14 = 7 + 7"
     };
 
-    private static final String[] INPUT_LINES = {
-        "l",
-        BASE_LEARN_LINES[0],
-        BASE_LEARN_LINES[1],
-        BASE_LEARN_LINES[2],
-        BASE_LEARN_LINES[3],
-        BASE_LEARN_LINES[4],
-        BASE_LEARN_LINES[5],
-        BASE_LEARN_LINES[6],
-        BASE_LEARN_LINES[7],
-        BASE_LEARN_LINES[8],
-        BASE_LEARN_LINES[9],
-        BASE_LEARN_LINES[10],
-        BASE_LEARN_LINES[11],
-        BASE_LEARN_LINES[12],
-        BASE_LEARN_LINES[13],
-        BASE_LEARN_LINES[14],
-        BASE_LEARN_LINES[15],
-        BASE_LEARN_LINES[16],
-        BASE_LEARN_LINES[17],
-        BASE_LEARN_LINES[18],
-        BASE_LEARN_LINES[19],
-        BASE_LEARN_LINES[20],
-        BASE_LEARN_LINES[21],
-        BASE_LEARN_LINES[22],
-        "",
-        "v",
-        "a",
-        "cat",
-        "canine",
-        "a",
-        "cat",
-        "dog",
-        "a",
-        "cat",
-        "mammal",
-        "a",
-        "cat",
-        "animal",
-        "p",
-        "cat is a feline",
-        "p",
-        "unknown token chain",
-        "x",
-        "q"
-    };
+    private static final String[] INPUT_LINES = buildInputLines();
 
     private static final String[] REQUIRED_OUTPUT_MARKERS = {
         "Constructivist AI - Learn from equivalent sequences",
@@ -97,6 +55,35 @@ public class Test {
         "Unknown command: 'x'",
         "Exiting Inferential AI."
     };
+
+    private static String[] buildInputLines() {
+        List<String> lines = new ArrayList<String>();
+        lines.add("l");
+        Collections.addAll(lines, BASE_LEARN_LINES);
+        Collections.addAll(
+            lines,
+            "",
+            "v",
+            "a",
+            "cat",
+            "canine",
+            "a",
+            "cat",
+            "dog",
+            "a",
+            "cat",
+            "mammal",
+            "a",
+            "cat",
+            "animal",
+            "p",
+            "cat is a feline",
+            "p",
+            "unknown token chain",
+            "x",
+            "q");
+        return lines.toArray(new String[lines.size()]);
+    }
 
     private static class EchoingInputStream extends InputStream {
         private final InputStream delegate;
@@ -209,7 +196,7 @@ public class Test {
         StringBuilder missing = new StringBuilder();
         int missingCount = 0;
         for (String marker : REQUIRED_OUTPUT_MARKERS) {
-            if (output.indexOf(marker) < 0) {
+            if (!output.contains(marker)) {
                 if (missingCount > 0) {
                     missing.append(", ");
                 }
