@@ -3,7 +3,6 @@ package danexcodr.ai.core;
 import danexcodr.ai.*;
 import danexcodr.ai.pattern.*;
 import java.util.*;
-import java.util.Map.Entry;
 
 public class PatternProcessor {
 
@@ -14,6 +13,9 @@ public class PatternProcessor {
   private GramAnalyzer gramAnalyzer;
   private StructuralEquivalenceDetector equivalenceDetector;
   private Map<String, Set<String>> structuralEquivalents;
+  private TermSelector termSelector;
+  private PatternExtractor patternExtractor;
+  private SequenceCollapser sequenceCollapser;
 
   private Set<String> learnedOptionalTokens = new HashSet<String>();
   private List<Pattern> allPatterns;
@@ -40,6 +42,10 @@ public class PatternProcessor {
     this.structuralEquivalents = structuralEquivalents;
     this.allPatterns = allPatterns;
     this.familiesDirty = familiesDirty;
+    this.termSelector = new TermSelector();
+    this.patternExtractor = new PatternExtractor();
+    this.sequenceCollapser =
+        new SequenceCollapser(patternFamilyManager, patternFamilyBuilder, structuralEquivalents);
     initialize();
   }
 
@@ -255,7 +261,7 @@ public class PatternProcessor {
     }
 
     Set<String> preliminaryStructuralTokens =
-        identifyStructuralTokens(equivalentSequences, contentTokens);
+        termSelector.identifyStructuralTokens(equivalentSequences, contentTokens);
     
     // UPDATED: Use the new selectTermsByClosestCompanion method with self-relation support
     String[] preliminaryTerms = rawContentFinder.selectTermsByClosestCompanion(
@@ -271,10 +277,12 @@ public class PatternProcessor {
     }
 
     String[] positionalTerms =
-        determinePositionalTerms(preliminaryTerms[0], preliminaryTerms[1], equivalentSequences);
+        termSelector.determinePositionalTerms(
+            preliminaryTerms[0], preliminaryTerms[1], equivalentSequences);
 
     List<Structure> tempPatterns =
-        extractStructures(equivalentSequences, positionalTerms[0], positionalTerms[1]);
+        patternExtractor.extractStructures(
+            equivalentSequences, positionalTerms[0], positionalTerms[1], termSelector);
 
     Set<StructuralEquivalenceDetector.EquivalencePair> newPairs =
         equivalenceDetector.detectStructuralEquivalents(
@@ -307,7 +315,7 @@ public class PatternProcessor {
     }
 
     Set<String> finalStructuralTokens =
-        identifyStructuralTokens(equivalentSequences, finalContentTokens);
+        termSelector.identifyStructuralTokens(equivalentSequences, finalContentTokens);
     
     // UPDATED: Use the new selectTermsByClosestCompanion method with self-relation support
     String[] finalTerms = rawContentFinder.selectTermsByClosestCompanion(
@@ -320,17 +328,19 @@ public class PatternProcessor {
     }
 
     String[] finalPositionalTerms =
-        determinePositionalTerms(finalTerms[0], finalTerms[1], equivalentSequences);
+        termSelector.determinePositionalTerms(finalTerms[0], finalTerms[1], equivalentSequences);
 
     tempPatterns =
-        extractStructures(equivalentSequences, finalPositionalTerms[0], finalPositionalTerms[1]);
+        patternExtractor.extractStructures(
+            equivalentSequences, finalPositionalTerms[0], finalPositionalTerms[1], termSelector);
 
     updateFamiliesWithPatterns(tempPatterns, finalPositionalTerms[0], finalPositionalTerms[1]);
 
     detectCrossDomainEquivalents(
         equivalentSequences, finalPositionalTerms[0], finalPositionalTerms[1]);
 
-    boolean isCommutative = isCommutative(equivalentSequences, finalTerms[0], finalTerms[1]);
+    boolean isCommutative =
+        patternExtractor.isCommutative(equivalentSequences, finalTerms[0], finalTerms[1]);
 
     System.out.println(
         "   Core relation: "
@@ -671,7 +681,8 @@ public class PatternProcessor {
       }
     }
 
-    List<List<String>> collapsedSequences = collapseSequences(originalSequences, protectedTokens);
+    List<List<String>> collapsedSequences =
+        sequenceCollapser.collapseSequences(originalSequences, protectedTokens);
 
     if (collapsedSequences != null && !collapsedSequences.isEmpty()) {
       if (collapsedSequences.get(0).size() <= 1) {
@@ -776,60 +787,6 @@ public class PatternProcessor {
     return allTokens;
   }
 
-  private Set<String> identifyStructuralTokens(
-      List<List<String>> equivalentSequences, Set<String> contentTokens) {
-    Set<String> structuralTokens = new LinkedHashSet<String>();
-    for (List<String> sequence : equivalentSequences) {
-      for (String token : sequence) {
-        if (!contentTokens.contains(token)) structuralTokens.add(token);
-      }
-    }
-    return structuralTokens;
-  }
-
-  private String[] determinePositionalTerms(
-    String w1, String w2, List<List<String>> equivalentSequences) {
-  int w1_left_of_w2 = 0;
-  int w2_left_of_w1 = 0;
-  for (List<String> sequence : equivalentSequences) {
-    int idx1 = sequence.indexOf(w1);
-    int idx2 = sequence.indexOf(w2);
-    if (idx1 != -1 && idx2 != -1) {
-      if (idx1 < idx2) w1_left_of_w2++;
-      else if (idx2 < idx1) w2_left_of_w1++;
-    }
-  }
-  if (w2_left_of_w1 > w1_left_of_w2) {
-    return new String[] {w2, w1};
-  } else {
-    return new String[] {w1, w2};
-  }
-}
-
-  private boolean isCommutative(
-    List<List<String>> equivalentSequences, String term1, String term2) {
-  
-  // Self-relation is automatically commutative
-  if (term1 != null && term2 != null && term1.equals(term2)) {
-    return true;
-  }
-  
-  Set<Data> patterns = new HashSet<Data>();
-  for (List<String> sequence : equivalentSequences) {
-    Data abstractPattern = SequenceTransformer.abstractSequencePF(sequence, term1, term2);
-    patterns.add(abstractPattern);
-  }
-  
-  Set<Data> flippedPatterns = new HashSet<Data>();
-  for (Data pattern : patterns) {
-    Data flipped = SequenceTransformer.flipTermPattern(pattern);
-    flippedPatterns.add(flipped);
-  }
-  
-  boolean isComm = patterns.containsAll(flippedPatterns) && flippedPatterns.containsAll(patterns);
-  
-  return isComm;
-}
 
   private void addDiscoveredEquivalents(
       Set<StructuralEquivalenceDetector.EquivalencePair> newPairs) {
@@ -840,47 +797,6 @@ public class PatternProcessor {
     }
   }
 
-  private List<Structure> extractStructures(
-    List<List<String>> equivalentSequences, String term1, String term2) {
-  
-  String[] positionalTerms = determinePositionalTerms(term1, term2, equivalentSequences);
-  String actualT1 = positionalTerms[0];
-  String actualT2 = positionalTerms[1];
-  
-  boolean isCommutative = isCommutative(equivalentSequences, actualT1, actualT2);
-  
-  Map<Data, Integer> patternCounts = new HashMap<Data, Integer>();
-  for (List<String> sequence : equivalentSequences) {
-    Data abstractPattern = SequenceTransformer.abstractSequencePF(sequence, actualT1, actualT2);
-    patternCounts.put(abstractPattern,
-        patternCounts.get(abstractPattern) == null ? 1 : patternCounts.get(abstractPattern) + 1);
-  }
-
-  List<Structure> tempPatterns = new ArrayList<Structure>();
-
-  for (Map.Entry<Data, Integer> entry : patternCounts.entrySet()) {
-    Data pattern = entry.getKey();
-    
-    Data finalData = PatternSlotFiller.finalize(pattern, actualT1, actualT2, isCommutative);
-    Structure newPattern = new Structure("TEMP");
-    Data newData = newPattern.getData();
-    
-    for (int i = 0; i < finalData.size(); i++) {
-      if (finalData.isPlaceholder(i)) {
-        newData.addPlaceholder(finalData.getPlaceholderAt(i));
-      } else if (finalData.isToken(i)) {
-        newData.addToken(finalData.getTokenAt(i));
-      } else if (finalData.isPFToken(i)) {
-        newData.addPFToken(finalData.getPFTokenAt(i));
-      }
-    }
-    
-    newPattern.setCommutative(isCommutative);
-    tempPatterns.add(newPattern);
-  }
-
-  return tempPatterns;
-}
 
   private void addStructuralEquivalence(String w1, String w2) {
     if (!structuralEquivalents.containsKey(w1))
@@ -938,99 +854,14 @@ public class PatternProcessor {
   }
 
   public void reevaluateEquivalents() {
-    Set<StructuralEquivalenceDetector.EquivalencePair> pairsToRemove =
-        new HashSet<StructuralEquivalenceDetector.EquivalencePair>();
-    for (Entry<String, Set<String>> entry : structuralEquivalents.entrySet()) {
-      for (String w2 : entry.getValue()) {
-        if (equivalenceDetector.areNeighbors(entry.getKey(), w2))
-          pairsToRemove.add(equivalenceDetector.createEquivalencePair(entry.getKey(), w2));
-      }
-    }
-    boolean changed = false;
-    for (StructuralEquivalenceDetector.EquivalencePair pair : pairsToRemove) {
-      if (structuralEquivalents.containsKey(pair.w1)
-          && structuralEquivalents.get(pair.w1).remove(pair.w2)) {
-        if (structuralEquivalents.get(pair.w1).isEmpty()) structuralEquivalents.remove(pair.w1);
-        changed = true;
-      }
-      if (structuralEquivalents.containsKey(pair.w2)
-          && structuralEquivalents.get(pair.w2).remove(pair.w1)) {
-        if (structuralEquivalents.get(pair.w2).isEmpty()) structuralEquivalents.remove(pair.w2);
-        changed = true;
-      }
-    }
+    boolean changed = equivalenceDetector.reevaluateEquivalents(structuralEquivalents);
     if (changed) {
       System.out.println("   [System: Reevaluated structural equivalents based on context.]");
       familiesDirty = true;
     }
   }
 
-  private List<List<String>> collapseSequences(
-      List<List<String>> sequences, Set<String> protectedTokens) {
-    List<PatternFamily> families =
-        patternFamilyManager.get(structuralEquivalents, patternFamilyBuilder);
-    if (families.isEmpty()) return null;
-    List<List<String>> collapsedList = new ArrayList<List<String>>();
-    boolean anyChange = false;
-    for (List<String> sequence : sequences) {
-      List<String> collapsed = collapseSequence(sequence, families, protectedTokens);
-      if (collapsed.size() < sequence.size()) anyChange = true;
-      collapsedList.add(collapsed);
-    }
-    return anyChange ? collapsedList : null;
-  }
-
-  private List<String> collapseSequence(
-      List<String> sequence, List<PatternFamily> families, Set<String> protectedTokens) {
-    List<String> currentSequence = new ArrayList<String>(sequence);
-    boolean changeOccurred = true;
-    while (changeOccurred) {
-      changeOccurred = false;
-      int bestMatchStart = -1, bestMatchLength = -1;
-      String bestFamilyId = null;
-      for (PatternFamily family : families) {
-        for (Structure sp : family.getMemberPatterns()) {
-          Data data = sp.getData();
-          for (int i = 0; i <= currentSequence.size() - data.size(); i++) {
-            if (PatternMatcher.isSubSequenceMatch(
-                currentSequence, i, data, family, protectedTokens)) {
-              if (data.size() > bestMatchLength) {
-                bestMatchLength = data.size();
-                bestMatchStart = i;
-                bestFamilyId = family.getId();
-              }
-            }
-          }
-        }
-      }
-      if (bestMatchStart != -1) {
-        List<String> nextSequence =
-            new ArrayList<String>(currentSequence.subList(0, bestMatchStart));
-        nextSequence.add(bestFamilyId);
-        nextSequence.addAll(
-            currentSequence.subList(bestMatchStart + bestMatchLength, currentSequence.size()));
-        currentSequence = nextSequence;
-        changeOccurred = true;
-      }
-    }
-    return currentSequence;
-  }
-
   public boolean hasCommutativeCollapse(List<String> sequence) {
-    List<PatternFamily> families =
-        patternFamilyManager.get(structuralEquivalents, patternFamilyBuilder);
-    if (families.isEmpty()) return false;
-    List<String> collapsed = collapseSequence(sequence, families, new HashSet<String>());
-    if (collapsed.size() == sequence.size()) return false;
-    for (String token : collapsed) {
-      if (token.startsWith("PF")) {
-        for (PatternFamily f : families) {
-          if (f.getId().equals(token)) {
-            for (Structure sp : f.getMemberPatterns()) if (sp.isCommutative()) return true;
-          }
-        }
-      }
-    }
-    return false;
+    return sequenceCollapser.hasCommutativeCollapse(sequence);
   }
 }
