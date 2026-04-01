@@ -287,6 +287,30 @@ public class StructuralEquivalenceDetector {
     return false;
   }
 
+  public boolean reevaluateEquivalents(Map<String, Set<String>> structuralEquivalents) {
+    Set<EquivalencePair> pairsToRemove = new HashSet<>();
+    for (Entry<String, Set<String>> entry : structuralEquivalents.entrySet()) {
+      for (String w2 : entry.getValue()) {
+        if (areNeighbors(entry.getKey(), w2))
+          pairsToRemove.add(createEquivalencePair(entry.getKey(), w2));
+      }
+    }
+    boolean changed = false;
+    for (EquivalencePair pair : pairsToRemove) {
+      if (structuralEquivalents.containsKey(pair.w1)
+          && structuralEquivalents.get(pair.w1).remove(pair.w2)) {
+        if (structuralEquivalents.get(pair.w1).isEmpty()) structuralEquivalents.remove(pair.w1);
+        changed = true;
+      }
+      if (structuralEquivalents.containsKey(pair.w2)
+          && structuralEquivalents.get(pair.w2).remove(pair.w1)) {
+        if (structuralEquivalents.get(pair.w2).isEmpty()) structuralEquivalents.remove(pair.w2);
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
   private Map<Set<String>, Set<Structure>> groupPatternsByStructuralFamily(
       List<Pattern> allPatterns) {
     Map<Set<String>, Set<Structure>> families = new HashMap<Set<String>, Set<Structure>>();
