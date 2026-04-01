@@ -2,7 +2,6 @@ package danexcodr.ai;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.io.PrintStream;
 import java.util.ArrayList;
@@ -97,76 +96,6 @@ public class Test {
         return lines.toArray(new String[lines.size()]);
     }
 
-    private static class EchoingInputStream extends InputStream {
-        private final InputStream delegate;
-        private final ByteArrayOutputStream lineBuffer = new ByteArrayOutputStream();
-
-        EchoingInputStream(InputStream delegate) {
-            this.delegate = delegate;
-        }
-
-        @Override
-        public int read() throws java.io.IOException {
-            int value = delegate.read();
-            if (value != -1) {
-                processByte(value);
-            } else {
-                flushPendingLine();
-            }
-            return value;
-        }
-
-        @Override
-        public int read(byte[] b, int off, int len) throws java.io.IOException {
-            if (b == null) {
-                throw new NullPointerException("byte array must not be null");
-            }
-            if (off < 0 || len < 0 || len > b.length - off) {
-                throw new IndexOutOfBoundsException(
-                    "Invalid offset/length: off=" + off + ", len=" + len + ", arrayLength=" + b.length);
-            }
-            if (len == 0) {
-                return 0;
-            }
-
-            int first = read();
-            if (first == -1) {
-                return -1;
-            }
-            b[off] = (byte) first;
-            return 1;
-        }
-
-        @Override
-        public void close() throws java.io.IOException {
-            flushPendingLine();
-            delegate.close();
-        }
-
-        private void processByte(int value) {
-            if (value == '\r') {
-                return;
-            }
-            if (value == '\n') {
-                emitCurrentLine();
-                return;
-            }
-            lineBuffer.write(value);
-        }
-
-        private void emitCurrentLine() {
-            String line = new String(lineBuffer.toByteArray(), StandardCharsets.UTF_8);
-            System.out.println(line);
-            lineBuffer.reset();
-        }
-
-        private void flushPendingLine() {
-            if (lineBuffer.size() > 0) {
-                emitCurrentLine();
-            }
-        }
-    }
-    
     public static void main(String[] args) throws Exception {
         System.out.println("--- Starting Constructivist AI Auto-Run ---\n");
 
@@ -190,9 +119,13 @@ public class Test {
                 "UTF-8");
             System.setOut(teeOut);
 
-            System.setIn(
-                new EchoingInputStream(
-                    new ByteArrayInputStream(inputSequence.getBytes(StandardCharsets.UTF_8))));
+            System.setIn(new ByteArrayInputStream(inputSequence.getBytes(StandardCharsets.UTF_8)));
+            for (String line : INPUT_LINES) {
+                if (line.isEmpty()) {
+                    continue;
+                }
+                System.out.println(line);
+            }
 
             Main.main(args);
 
