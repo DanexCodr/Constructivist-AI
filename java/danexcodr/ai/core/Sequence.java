@@ -505,7 +505,7 @@ public class Sequence {
     String token = sequence.get(index);
     Set<String> candidates = equivalentCandidates(token);
     if (candidates.size() <= 1) {
-      return token;
+      return null;
     }
 
     String leftNeighbor = index > 0 ? sequence.get(index - 1) : null;
@@ -518,13 +518,11 @@ public class Sequence {
       if (score > bestScore) {
         bestScore = score;
         best = candidate;
-      } else if (score == bestScore && token.equals(candidate)) {
-        best = token;
       }
     }
 
-    if (bestScore <= 0) {
-      return token;
+    if (bestScore <= 0 || token.equals(best)) {
+      return null;
     }
     return best;
   }
