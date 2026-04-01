@@ -2,6 +2,7 @@ package danexcodr.ai;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.io.PrintStream;
 import java.util.ArrayList;
