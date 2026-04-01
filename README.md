@@ -101,7 +101,6 @@ Constructivist AI processes token sequences in two phases:
 ### Prerequisites
 
 - Java 7 or higher
-- `inotify-tools` (Linux only, needed for `watch.sh` auto-rebuild — optional)
 
 ### Compile
 
@@ -109,28 +108,13 @@ Constructivist AI processes token sequences in two phases:
 javac -d bin $(find java -name "*.java" | tr '\n' ' ')
 ```
 
-### Build `constructivist_source.jar` (manual)
+### Build `constructivist_source.jar`
 
 ```bash
-./build.sh
+jar cf constructivist_source.jar -C . java
 ```
 
-Compiles all sources under `java/` and packages them into `constructivist_source.jar`.
-
-### Build and run immediately
-
-```bash
-./build.sh run
-```
-
-### Auto-rebuild on source change
-
-```bash
-./watch.sh
-```
-
-Watches `java/` for any `.java` file change and rebuilds `constructivist_source.jar` automatically.  
-Requires `inotify-tools` (`sudo apt-get install inotify-tools` on Debian/Ubuntu).
+Packages sources under `java/` into `constructivist_source.jar`.
 
 ### Run the JAR directly
 
