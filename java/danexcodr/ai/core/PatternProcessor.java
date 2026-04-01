@@ -1,7 +1,6 @@
 package danexcodr.ai.core;
 
 import danexcodr.ai.*;
-import static danexcodr.ai.Config.*;
 import danexcodr.ai.pattern.*;
 import java.util.*;
 import java.util.Map.Entry;
@@ -12,25 +11,24 @@ public class PatternProcessor {
   private PatternFamilyBuilder patternFamilyBuilder;
   private PatternFamilyManager patternFamilyManager;
   private OptionalFinder optionalFinder;
-  private BigramAnalyzer bigramAnalyzer;
+  private GramAnalyzer gramAnalyzer;
   private StructuralEquivalenceDetector equivalenceDetector;
   private Map<String, Set<String>> structuralEquivalents;
-  
-  private Set<String> learnedOptionalWords = new HashSet<String>();
-  private List<Pattern> allPatterns; // Now only contains Contents
 
-  boolean familiesDirty;
-  
+  private Set<String> learnedOptionalTokens = new HashSet<String>();
+  private List<Pattern> allPatterns;
   private Map<String, List<Content>> relationPatternsByT1 = new HashMap<String, List<Content>>();
   private Map<String, List<Content>> relationPatternsByT2 = new HashMap<String, List<Content>>();
   private Map<String, Content> relationPatternsByKey = new HashMap<String, Content>();
+
+  boolean familiesDirty;
 
   public PatternProcessor(
       SymbolManager symbolManager,
       PatternFamilyBuilder patternFamilyBuilder,
       PatternFamilyManager patternFamilyManager,
       OptionalFinder optionalFinder,
-      BigramAnalyzer bigramAnalyzer,
+      GramAnalyzer gramAnalyzer,
       Map<String, Set<String>> structuralEquivalents,
       List<Pattern> allPatterns,
       boolean familiesDirty) {
@@ -38,70 +36,44 @@ public class PatternProcessor {
     this.patternFamilyBuilder = patternFamilyBuilder;
     this.patternFamilyManager = patternFamilyManager;
     this.optionalFinder = optionalFinder;
-    this.bigramAnalyzer = bigramAnalyzer;
+    this.gramAnalyzer = gramAnalyzer;
     this.structuralEquivalents = structuralEquivalents;
     this.allPatterns = allPatterns;
     this.familiesDirty = familiesDirty;
-    initializeRelationMaps();
+    initialize();
   }
 
-  private void initializeRelationMaps() {
+  private void initialize() {
     for (Pattern pattern : allPatterns) {
-        if (pattern instanceof Content) {
-            Content rp = (Content) pattern;
-            addToRelationMaps(rp);
-        }
+      if (pattern instanceof Content) {
+        Content rp = (Content) pattern;
+        addToRelationMaps(rp);
+      }
     }
   }
-  
+
   private void addToRelationMaps(Content rp) {
     if (!relationPatternsByT1.containsKey(rp.getT1())) {
-        relationPatternsByT1.put(rp.getT1(), new ArrayList<Content>());
+      relationPatternsByT1.put(rp.getT1(), new ArrayList<Content>());
     }
     relationPatternsByT1.get(rp.getT1()).add(rp);
-    
+
     if (!relationPatternsByT2.containsKey(rp.getT2())) {
-        relationPatternsByT2.put(rp.getT2(), new ArrayList<Content>());
+      relationPatternsByT2.put(rp.getT2(), new ArrayList<Content>());
     }
     relationPatternsByT2.get(rp.getT2()).add(rp);
-    
+
     String key = rp.getT1() + "|" + rp.getT2();
     relationPatternsByKey.put(key, rp);
-    
+
     if (rp.isCommutative()) {
-        String reverseKey = rp.getT2() + "|" + rp.getT1();
-        relationPatternsByKey.put(reverseKey, rp);
-    }
-  }
-  
-  private void removeFromRelationMaps(Content rp) {
-    List<Content> t1List = relationPatternsByT1.get(rp.getT1());
-    if (t1List != null) {
-        t1List.remove(rp);
-        if (t1List.isEmpty()) {
-            relationPatternsByT1.remove(rp.getT1());
-        }
-    }
-    
-    List<Content> t2List = relationPatternsByT2.get(rp.getT2());
-    if (t2List != null) {
-        t2List.remove(rp);
-        if (t2List.isEmpty()) {
-            relationPatternsByT2.remove(rp.getT2());
-        }
-    }
-    
-    String key = rp.getT1() + "|" + rp.getT2();
-    relationPatternsByKey.remove(key);
-    
-    if (rp.isCommutative()) {
-        String reverseKey = rp.getT2() + "|" + rp.getT1();
-        relationPatternsByKey.remove(reverseKey);
+      String reverseKey = rp.getT2() + "|" + rp.getT1();
+      relationPatternsByKey.put(reverseKey, rp);
     }
   }
 
-  public Set<String> getLearnedOptionalWords() {
-    return learnedOptionalWords;
+  public Set<String> getLearnedOptionalTokens() {
+    return learnedOptionalTokens;
   }
 
   public void setEquivalenceDetector(StructuralEquivalenceDetector equivalenceDetector) {
@@ -110,354 +82,363 @@ public class PatternProcessor {
 
   public List<Content> findAllContents(String term1, String term2) {
     List<Content> results = new ArrayList<Content>();
-    
+
     String directKey = term1 + "|" + term2;
     Content directPattern = relationPatternsByKey.get(directKey);
     if (directPattern != null) {
-        results.add(directPattern);
+      results.add(directPattern);
     }
-    
+
     List<Content> fromT1 = relationPatternsByT1.get(term1);
     if (fromT1 != null) {
-        for (Content rp : fromT1) {
-            if (rp.getT2().equals(term2) && !results.contains(rp)) {
-                results.add(rp);
-            }
+      for (Content rp : fromT1) {
+        if (rp.getT2().equals(term2) && !results.contains(rp)) {
+          results.add(rp);
         }
+      }
     }
-    
+
     List<Content> fromT2 = relationPatternsByT2.get(term2);
     if (fromT2 != null) {
-        for (Content rp : fromT2) {
-            if (rp.getT1().equals(term1) && rp.isCommutative() && !results.contains(rp)) {
-                results.add(rp);
-            }
+      for (Content rp : fromT2) {
+        if (rp.getT1().equals(term1) && rp.isCommutative() && !results.contains(rp)) {
+          results.add(rp);
         }
+      }
     }
-    
+
     return results;
   }
 
   public List<Content> findAllContentsWithTerm(String term) {
     List<Content> results = new ArrayList<Content>();
-    
+
     List<Content> fromTerm = relationPatternsByT1.get(term);
     if (fromTerm != null) {
-        results.addAll(fromTerm);
+      results.addAll(fromTerm);
     }
-    
+
     List<Content> toTerm = relationPatternsByT2.get(term);
     if (toTerm != null) {
-        for (Content rp : toTerm) {
-            if (!results.contains(rp)) {
-                results.add(rp);
-            }
+      for (Content rp : toTerm) {
+        if (!results.contains(rp)) {
+          results.add(rp);
         }
+      }
     }
-    
+
     return results;
   }
 
   public Content findContent(String term1, String term2, PatternFamily family) {
     String key = term1 + "|" + term2;
     Content rp = relationPatternsByKey.get(key);
-    
+
     if (rp != null) {
-        if (family == null || (rp.getFamilyId() != null && rp.getFamilyId().equals(family.getId()))) {
-            return rp;
-        }
+      if (family == null || (rp.getFamilyId() != null && rp.getFamilyId().equals(family.getId()))) {
+        return rp;
+      }
     }
-    
+
     if (relationPatternsByKey.containsKey(term2 + "|" + term1)) {
-        rp = relationPatternsByKey.get(term2 + "|" + term1);
-        if (rp != null && rp.isCommutative()) {
-            if (family == null || (rp.getFamilyId() != null && rp.getFamilyId().equals(family.getId()))) {
-                return rp;
-            }
+      rp = relationPatternsByKey.get(term2 + "|" + term1);
+      if (rp != null && rp.isCommutative()) {
+        if (family == null
+            || (rp.getFamilyId() != null && rp.getFamilyId().equals(family.getId()))) {
+          return rp;
         }
+      }
     }
-    
+
     return null;
   }
 
   public Content findContent(String term1, String term2) {
     return findContent(term1, term2, null);
   }
-  
+
   public Content getFamilyForRelation(String term1, String term2) {
     String key = term1 + "|" + term2;
     Content rp = relationPatternsByKey.get(key);
     if (rp != null && rp.getFamilyId() != null) {
-        return rp;
+      return rp;
     }
-    
+
     String reverseKey = term2 + "|" + term1;
     rp = relationPatternsByKey.get(reverseKey);
     if (rp != null && rp.isCommutative() && rp.getFamilyId() != null) {
-        return rp;
+      return rp;
     }
-    
+
     return null;
-}
+  }
 
   public void processEquivalenceSet(List<List<String>> equivalentSequences) {
-    // EARLY EXIT: Check for empty input
     if (equivalentSequences == null || equivalentSequences.isEmpty()) {
-        return;
+      return;
     }
-    
-    // CACHE 1: Get all words in sequences (compute once)
-    Set<String> allWordsInSequences = getAllWords(equivalentSequences);
-    
-    // CACHE 2: Get optionals once
-    optionalFinder.clearOptionals();
-    optionalFinder.preprocessAndIdentifyOptionals(equivalentSequences);
-    Set<String> optionals = optionalFinder.getOptionals();
-    learnedOptionalWords.addAll(optionals);
-    
-    // Remove optionals from consideration early
-    Set<String> nonOptionalWords = new HashSet<String>(allWordsInSequences);
-    nonOptionalWords.removeAll(optionals);
-    
-    // Only proceed if we have content to process
-    if (nonOptionalWords.isEmpty()) {
-        System.out.println("   All words are optional, skipping analysis.");
-        return;
+
+    Set<String> allTokensInSequences = getAllTokens(equivalentSequences);
+
+    optionalFinder.clear();
+    optionalFinder.analyze(equivalentSequences);
+    Set<String> optionals = optionalFinder.get();
+    learnedOptionalTokens.addAll(optionals);
+
+    Set<String> nonOptionalTokens = new HashSet<String>(allTokensInSequences);
+    nonOptionalTokens.removeAll(optionals);
+
+    if (nonOptionalTokens.isEmpty()) {
+      System.out.println("   All tokens are optional, skipping analysis.");
+      return;
     }
-    
-    // CACHE 3: Content analysis - compute once and reuse
-    ContentFinder rawContentFinder = new ContentFinder(optionalFinder, bigramAnalyzer);
-    Set<String> contentWords = rawContentFinder.identifyContentWords(equivalentSequences, null);
-    
-    // Fallback checks (only if needed)
-    if (contentWords.size() < 2) {
-        contentWords = rawContentFinder.runAnyMovementCheck(equivalentSequences, null);
+
+    ContentFinder rawContentFinder = new ContentFinder(optionalFinder, gramAnalyzer);
+    Set<String> contentTokens = rawContentFinder.identifyContent(equivalentSequences, null);
+
+    if (contentTokens.size() < 2) {
+      contentTokens = rawContentFinder.checkMovement(equivalentSequences, null);
     }
-    if (contentWords.size() < 2) {
-        contentWords = rawContentFinder.runParityFallback(equivalentSequences);
+    if (contentTokens.size() < 2) {
+      contentTokens = rawContentFinder.parify(equivalentSequences);
     }
-    
-    // CACHE 4: Protected words (structural words that aren't content)
-    Set<String> protectedWords = new HashSet<String>();
-    for (String word : nonOptionalWords) {
-        if (!contentWords.contains(word)) {
-            protectedWords.add(word);
-        }
+
+    Set<String> protectedTokens = new HashSet<String>();
+    for (String token : nonOptionalTokens) {
+      if (!contentTokens.contains(token)) {
+        protectedTokens.add(token);
+      }
     }
-    
-    // CACHE 5: Word positions (compute once)
-    Map<String, Set<Integer>> wordPositions = new HashMap<String, Set<Integer>>();
+
+    Map<String, Set<Integer>> tokenPositions = new HashMap<String, Set<Integer>>();
     for (List<String> sequence : equivalentSequences) {
-        for (int i = 0; i < sequence.size(); i++) {
-            String word = sequence.get(i);
-            if (!wordPositions.containsKey(word)) {
-                wordPositions.put(word, new HashSet<Integer>());
-            }
-            wordPositions.get(word).add(i);
+      for (int i = 0; i < sequence.size(); i++) {
+        String token = sequence.get(i);
+        if (!tokenPositions.containsKey(token)) {
+          tokenPositions.put(token, new HashSet<Integer>());
         }
+        tokenPositions.get(token).add(i);
+      }
     }
-    
-    // CACHE 6: Learned structural words (compute once)
-    Set<String> learnedStructuralWords = getLearnedStructuralWords();
-    
-    // CACHE 7: Bigram analysis (compute once)
-    Set<String> bigramContentWords = bigramAnalyzer.runBigramAnalysis(equivalentSequences, nonOptionalWords);
-    if (!bigramContentWords.isEmpty()) {
-        System.out.println("   [System: Bigram analysis detected moving word pairs]");
-        // Use bigram results if they found content
-        if (!bigramContentWords.isEmpty()) {
-            contentWords = bigramContentWords;
-        }
+
+    Set<String> learnedStructuralTokens = getLearnedStructuralTokens();
+
+    Set<String> gramContentTokens = gramAnalyzer.analyze(equivalentSequences, nonOptionalTokens);
+    if (!gramContentTokens.isEmpty()) {
+      System.out.println("   [System: Gram analysis detected moving token pairs]");
+      if (!gramContentTokens.isEmpty()) {
+        contentTokens = gramContentTokens;
+      }
     }
-    
-    // Build context only if needed (avoid redundant building)
+
     boolean needsContextBuild = false;
     if (!equivalentSequences.isEmpty() && !equivalentSequences.get(0).isEmpty()) {
-        String firstWord = equivalentSequences.get(0).get(0);
-        if (!firstWord.startsWith("PF")) {
-            Symbol s = symbolManager.getSymbols().get(firstWord);
-            needsContextBuild = (s == null || (s.leftContext.isEmpty() && s.rightContext.isEmpty()));
-        }
+      String firstToken = equivalentSequences.get(0).get(0);
+      if (!firstToken.startsWith("PF")) {
+        Symbol s = symbolManager.getSymbols().get(firstToken);
+        needsContextBuild = (s == null || (s.leftContext.isEmpty() && s.rightContext.isEmpty()));
+      }
     }
-    
+
     if (needsContextBuild) {
-        // Build context for all sequences at once
-        for (List<String> seq : equivalentSequences) {
-            symbolManager.buildContext(seq);
-        }
+      for (List<String> seq : equivalentSequences) {
+        symbolManager.buildContext(seq);
+      }
     }
-    
-    // Reevaluate equivalents once
+
     reevaluateEquivalents();
-    
-    // If content analysis failed, try collapse
-    if (contentWords.size() < 2) {
-        System.out.println("   Analysis failed to find content. Trying collapse...");
-        attemptCollapseAndAnalysis(equivalentSequences);
-        return;
+
+    if (contentTokens.size() < 2) {
+      System.out.println("   Analysis failed to find content. Trying collapse...");
+      attemptCollapseAndAnalysis(equivalentSequences);
+      return;
     }
+
+    Set<String> preliminaryStructuralTokens =
+        identifyStructuralTokens(equivalentSequences, contentTokens);
     
-    // Use cached wordPositions for term selection
-    Set<String> preliminaryStructuralWords = identifyStructuralWords(equivalentSequences, contentWords);
-    String[] preliminaryTerms = selectTermsByClosestCompanion(contentWords, equivalentSequences, wordPositions, preliminaryStructuralWords);
-    
+    // UPDATED: Use the new selectTermsByClosestCompanion method with self-relation support
+    String[] preliminaryTerms = rawContentFinder.selectTermsByClosestCompanion(
+        contentTokens, equivalentSequences, tokenPositions, preliminaryStructuralTokens);
+
     if (preliminaryTerms == null) {
-        System.out.println("   Could not select preliminary terms from content: " + contentWords + ". Trying collapse...");
-        attemptCollapseAndAnalysis(equivalentSequences);
-        return;
+      System.out.println(
+          "   Could not select preliminary terms from content: "
+              + contentTokens
+              + ". Trying collapse...");
+      attemptCollapseAndAnalysis(equivalentSequences);
+      return;
     }
-    
-    // Use cached equivalentSequences for positional term determination
-    String[] positionalTerms = determinePositionalTerms(preliminaryTerms[0], preliminaryTerms[1], equivalentSequences);
-    
-    // CHANGED: Extract structural patterns first (temporary)
-    List<Structure> tempPatterns = extractStructures(equivalentSequences, positionalTerms[0], positionalTerms[1]);
-    
-    // Use cached allPatterns for equivalence detection
-    Set<StructuralEquivalenceDetector.EquivalencePair> newPairs = 
-        equivalenceDetector.detectStructuralEquivalents(equivalentSequences, preliminaryStructuralWords, 
-                                                      positionalTerms[0], positionalTerms[1], 
-                                                      getCurrentPatternsForDetection());
+
+    String[] positionalTerms =
+        determinePositionalTerms(preliminaryTerms[0], preliminaryTerms[1], equivalentSequences);
+
+    List<Structure> tempPatterns =
+        extractStructures(equivalentSequences, positionalTerms[0], positionalTerms[1]);
+
+    Set<StructuralEquivalenceDetector.EquivalencePair> newPairs =
+        equivalenceDetector.detectStructuralEquivalents(
+            equivalentSequences,
+            preliminaryStructuralTokens,
+            positionalTerms[0],
+            positionalTerms[1],
+            scan());
     addDiscoveredEquivalents(newPairs);
-    
-    // Use cached learnedStructuralWords for final content check
-    Set<String> finalContentWords = contentWords; // Start with cached
-    
-    // Only recompute if structure changed significantly
-    if (!learnedStructuralWords.containsAll(preliminaryStructuralWords)) {
-        ContentFinder contentFinder = new ContentFinder(optionalFinder, bigramAnalyzer);
-        finalContentWords = contentFinder.identifyContentWords(equivalentSequences, learnedStructuralWords);
-        if (finalContentWords.size() < 2) {
-            finalContentWords = contentFinder.runAnyMovementCheck(equivalentSequences, learnedStructuralWords);
-        }
-        if (finalContentWords.size() < 2) {
-            finalContentWords = contentFinder.runParityFallback(equivalentSequences);
-        }
+
+    Set<String> finalContentTokens = contentTokens;
+
+    if (!learnedStructuralTokens.containsAll(preliminaryStructuralTokens)) {
+      ContentFinder contentFinder = new ContentFinder(optionalFinder, gramAnalyzer);
+      finalContentTokens =
+          contentFinder.identifyContent(equivalentSequences, learnedStructuralTokens);
+      if (finalContentTokens.size() < 2) {
+        finalContentTokens =
+            contentFinder.checkMovement(equivalentSequences, learnedStructuralTokens);
+      }
+      if (finalContentTokens.size() < 2) {
+        finalContentTokens = contentFinder.parify(equivalentSequences);
+      }
     }
-    
-    if (finalContentWords.size() < 2) {
-        System.out.println("   Analysis failed after refinement. Trying collapse...");
-        attemptCollapseAndAnalysis(equivalentSequences);
-        return;
+
+    if (finalContentTokens.size() < 2) {
+      System.out.println("   Analysis failed after refinement. Trying collapse...");
+      attemptCollapseAndAnalysis(equivalentSequences);
+      return;
     }
+
+    Set<String> finalStructuralTokens =
+        identifyStructuralTokens(equivalentSequences, finalContentTokens);
     
-    // Use cached equivalentSequences for remaining processing
-    Set<String> finalStructuralWords = identifyStructuralWords(equivalentSequences, finalContentWords);
-    String[] finalTerms = selectTermsByClosestCompanion(finalContentWords, equivalentSequences, wordPositions, finalStructuralWords);
-    
+    // UPDATED: Use the new selectTermsByClosestCompanion method with self-relation support
+    String[] finalTerms = rawContentFinder.selectTermsByClosestCompanion(
+        finalContentTokens, equivalentSequences, tokenPositions, finalStructuralTokens);
+
     if (finalTerms == null) {
-        System.out.println("   Could not select final terms from content. Trying collapse...");
-        attemptCollapseAndAnalysis(equivalentSequences);
-        return;
+      System.out.println("   Could not select final terms from content. Trying collapse...");
+      attemptCollapseAndAnalysis(equivalentSequences);
+      return;
     }
-    
-    String[] finalPositionalTerms = determinePositionalTerms(finalTerms[0], finalTerms[1], equivalentSequences);
-    
-    // CHANGED: Extract patterns again with final terms
-    tempPatterns = extractStructures(equivalentSequences, finalPositionalTerms[0], finalPositionalTerms[1]);
-    
-    // CHANGED: Update families with temporary patterns
+
+    String[] finalPositionalTerms =
+        determinePositionalTerms(finalTerms[0], finalTerms[1], equivalentSequences);
+
+    tempPatterns =
+        extractStructures(equivalentSequences, finalPositionalTerms[0], finalPositionalTerms[1]);
+
     updateFamiliesWithPatterns(tempPatterns, finalPositionalTerms[0], finalPositionalTerms[1]);
-    
-    detectCrossDomainEquivalents(equivalentSequences, finalPositionalTerms[0], finalPositionalTerms[1]);
-    
-    // Use cached equivalentSequences for commutativity check
+
+    detectCrossDomainEquivalents(
+        equivalentSequences, finalPositionalTerms[0], finalPositionalTerms[1]);
+
     boolean isCommutative = isCommutative(equivalentSequences, finalTerms[0], finalTerms[1]);
-    
-    System.out.println("   Core relation: " + finalPositionalTerms[0] + (isCommutative ? " <-> " : " -> ") + finalPositionalTerms[1]);
-    
-    if (finalContentWords.size() > 2) {
-        Set<String> otherContent = new LinkedHashSet<String>(finalContentWords);
-        otherContent.remove(finalTerms[0]);
-        otherContent.remove(finalTerms[1]);
-        if (!otherContent.isEmpty()) {
-            List<String> sortedOther = new ArrayList<String>(otherContent);
-            Collections.sort(sortedOther);
-            System.out.println("   Duals: " + sortedOther);
-        }
-    }
-    
-    Set<String> dualWordsInThisSet = new HashSet<String>();
-    Set<String> pureStructuralWords = new HashSet<String>();
-    for (String word : finalStructuralWords) {
-        Symbol symbol = symbolManager.getSymbols().get(word);
-        if (symbol != null && symbol.relations.contains("D")) {
-            dualWordsInThisSet.add(word);
-        } else {
-            pureStructuralWords.add(word);
-        }
+
+    System.out.println(
+        "   Core relation: "
+            + finalPositionalTerms[0]
+            + (isCommutative ? " <-> " : " -> ")
+            + finalPositionalTerms[1]);
+
+    if (finalContentTokens.size() > 2) {
+      Set<String> otherContent = new LinkedHashSet<String>(finalContentTokens);
+      otherContent.remove(finalTerms[0]);
+      otherContent.remove(finalTerms[1]);
+      if (!otherContent.isEmpty()) {
+        List<String> sortedOther = new ArrayList<String>(otherContent);
+        Collections.sort(sortedOther);
+        System.out.println("   Duals: " + sortedOther);
+      }
     }
 
-    if (!dualWordsInThisSet.isEmpty()) {
-        List<String> sortedDual = new ArrayList<String>(dualWordsInThisSet);
-        Collections.sort(sortedDual);
-        System.out.println("   Duals: " + sortedDual);
+    Set<String> dualTokensInThisSet = new HashSet<String>();
+    Set<String> pureStructuralTokens = new HashSet<String>();
+    for (String token : finalStructuralTokens) {
+      Symbol symbol = symbolManager.getSymbols().get(token);
+      if (symbol != null && symbol.relations.contains("D")) {
+        dualTokensInThisSet.add(token);
+      } else {
+        pureStructuralTokens.add(token);
+      }
     }
 
-    if (!pureStructuralWords.isEmpty()) {
-        List<String> sortedStruct = new ArrayList<String>(pureStructuralWords);
-        Collections.sort(sortedStruct);
-        System.out.println("   Structurals: " + sortedStruct);
+    if (!dualTokensInThisSet.isEmpty()) {
+      List<String> sortedDual = new ArrayList<String>(dualTokensInThisSet);
+      Collections.sort(sortedDual);
+      System.out.println("   Duals: " + sortedDual);
+    }
+
+    if (!pureStructuralTokens.isEmpty()) {
+      List<String> sortedStruct = new ArrayList<String>(pureStructuralTokens);
+      Collections.sort(sortedStruct);
+      System.out.println("   Structurals: " + sortedStruct);
     }
 
     updateAllFamiliesWithNewEquivalents();
-    
-    // FETCH FAMILIES ONCE AND REUSE
-    List<PatternFamily> families = patternFamilyManager.getPatternFamilies(
-        structuralEquivalents, patternFamilyBuilder); // CHANGED: Removed familiesDirty parameter
+
+    List<PatternFamily> families =
+        patternFamilyManager.get(structuralEquivalents, patternFamilyBuilder);
 
     PatternFamily patternFamily = null;
-    
+
     for (PatternFamily family : families) {
-        for (Structure sp : family.getMemberPatterns()) {
-            if (!equivalentSequences.isEmpty()) {
-                List<String> exampleSeq = equivalentSequences.get(0);
-                List<String> abstractPattern = SequenceTransformer.abstractSequencePF(
-                    exampleSeq, finalPositionalTerms[0], finalPositionalTerms[1]);
-                
-                boolean matches = false;
-                
-                if (sp.getStructuralSlots().equals(abstractPattern)) {
-                    matches = true;
-                }
-                
-                if (!matches && isCommutative) {
-                    List<String> flippedPattern = SequenceTransformer.flipTermPatternWithTerms(
-                        abstractPattern, finalPositionalTerms[0], finalPositionalTerms[1]);
-                    if (sp.getStructuralSlots().equals(flippedPattern)) {
-                        matches = true;
-                    }
-                }
-                
-                if (!matches && isCommutative) {
-                    List<String> patternWithC = new ArrayList<String>();
-                    for (String token : abstractPattern) {
-                        if (token.equals("[1]") || token.equals("[2]")) {
-                            patternWithC.add("[C]");
-                        } else {
-                            patternWithC.add(token);
-                        }
-                    }
-                    if (sp.getStructuralSlots().equals(patternWithC)) {
-                        matches = true;
-                    }
-                }
-                
-                if (matches) {
-                    patternFamily = family;
-                    break;
-                }
+      for (Structure sp : family.getMemberPatterns()) {
+        if (!equivalentSequences.isEmpty()) {
+          List<String> exampleSeq = equivalentSequences.get(0);
+          Data abstractPattern =
+              SequenceTransformer.abstractSequencePF(
+                  exampleSeq, finalPositionalTerms[0], finalPositionalTerms[1]);
+
+          boolean matches = false;
+
+          if (sp.getData().equals(abstractPattern)) {
+            matches = true;
+          }
+
+          if (!matches && isCommutative) {
+            Data flippedPattern =
+                SequenceTransformer.flipTermPatternWithTerms(
+                    abstractPattern, finalPositionalTerms[0], finalPositionalTerms[1]);
+            if (sp.getData().equals(flippedPattern)) {
+              matches = true;
             }
+          }
+
+          if (!matches && isCommutative) {
+            Data patternWithC = new Data();
+            for (int i = 0; i < abstractPattern.size(); i++) {
+              if (abstractPattern.isPlaceholder(i)) {
+                SlotFlag flag = abstractPattern.getPlaceholderAt(i);
+                if (flag == SlotFlag._1 || flag == SlotFlag._2) {
+                  patternWithC.addPlaceholder(SlotFlag._C);
+                } else {
+                  patternWithC.addPlaceholder(flag);
+                }
+              } else if (abstractPattern.isToken(i)) {
+                patternWithC.addToken(abstractPattern.getTokenAt(i));
+              } else if (abstractPattern.isPFToken(i)) {
+                patternWithC.addPFToken(abstractPattern.getPFTokenAt(i));
+              }
+            }
+            if (sp.getData().equals(patternWithC)) {
+              matches = true;
+            }
+          }
+
+          if (matches) {
+            patternFamily = family;
+            break;
+          }
         }
-        if (patternFamily != null) break;
+      }
+      if (patternFamily != null) break;
     }
 
-    Content pattern = findOrCreatePatternForFamily(
-        finalPositionalTerms[0], finalPositionalTerms[1], patternFamily, isCommutative);
-        
+    Content pattern =
+        findOrCreatePatternForFamily(
+            finalPositionalTerms[0], finalPositionalTerms[1], patternFamily, isCommutative);
+
     pattern.setFrequency(pattern.getFrequency() + equivalentSequences.size());
     for (List<String> seq : equivalentSequences) {
-        pattern.addConcreteExample(new ArrayList<String>(seq));
+      pattern.addConcreteExample(new ArrayList<String>(seq));
     }
     pattern.setBaseTermsT1(getBaseTermsForSyntheticToken(finalPositionalTerms[0]));
     pattern.setBaseTermsT2(getBaseTermsForSyntheticToken(finalPositionalTerms[1]));
@@ -465,162 +446,178 @@ public class PatternProcessor {
     addToRelationMaps(pattern);
 
     if (isCommutative) {
-        Content reversePattern = findOrCreatePatternForFamily(
-            finalPositionalTerms[1], finalPositionalTerms[0], patternFamily, isCommutative);
-        reversePattern.setFrequency(reversePattern.getFrequency() + equivalentSequences.size());
-        for (List<String> seq : equivalentSequences) {
-            reversePattern.addConcreteExample(new ArrayList<String>(seq));
-        }
-        reversePattern.setBaseTermsT1(getBaseTermsForSyntheticToken(finalPositionalTerms[1]));
-        reversePattern.setBaseTermsT2(getBaseTermsForSyntheticToken(finalPositionalTerms[0]));
-        
-        addToRelationMaps(reversePattern);
+      Content reversePattern =
+          findOrCreatePatternForFamily(
+              finalPositionalTerms[1], finalPositionalTerms[0], patternFamily, isCommutative);
+      reversePattern.setFrequency(reversePattern.getFrequency() + equivalentSequences.size());
+      for (List<String> seq : equivalentSequences) {
+        reversePattern.addConcreteExample(new ArrayList<String>(seq));
+      }
+      reversePattern.setBaseTermsT1(getBaseTermsForSyntheticToken(finalPositionalTerms[1]));
+      reversePattern.setBaseTermsT2(getBaseTermsForSyntheticToken(finalPositionalTerms[0]));
+
+      addToRelationMaps(reversePattern);
     }
 
-    for (String word : finalContentWords) addSymbolRole(word, "C");
+    for (String token : finalContentTokens) addSymbolRole(token, "C");
     addSymbolRole(finalPositionalTerms[0], "1");
     addSymbolRole(finalPositionalTerms[1], "2");
-    for (String word : finalStructuralWords) addSymbolRole(word, "S");
+    for (String token : finalStructuralTokens) addSymbolRole(token, "S");
 
     familiesDirty = true;
-    // REUSE the families list we already fetched
-    families = patternFamilyManager.getPatternFamilies(structuralEquivalents, patternFamilyBuilder);
-
-    for (Pattern p : allPatterns) {
-        if (!(p instanceof Content)) continue;
-        Content rp = (Content) p;
-        
-        if (rp.getFamilyId() != null) continue;
-        
-        if (rp.getConcreteExamples().isEmpty()) continue;
-        
-        boolean familyAssigned = false;
-        for (PatternFamily family : families) {
-            if (familyAssigned) break;
-            
-            for (List<String> seq : rp.getConcreteExamples()) {
-                if (familyAssigned) break;
-                
-                List<String> abstractPattern = SequenceTransformer.abstractSequencePF(seq, rp.getT1(), rp.getT2());
-                List<String> flippedPattern = SequenceTransformer.flipTermPatternWithTerms(abstractPattern, rp.getT1(), rp.getT2());
-                
-                for (Structure sp : family.getMemberPatterns()) {
-                    if (familyAssigned) break;
-                    
-                    boolean matchesNormal = sp.getStructuralSlots().equals(abstractPattern);
-                    boolean matchesFlipped = rp.isCommutative() && sp.getStructuralSlots().equals(flippedPattern);
-                    
-                    if (!matchesNormal && !matchesFlipped && rp.isCommutative()) {
-                        List<String> patternWithC = new ArrayList<String>();
-                        for (String token : abstractPattern) {
-                            if (token.equals("[1]") || token.equals("[2]")) {
-                                patternWithC.add("[C]");
-                            } else {
-                                patternWithC.add(token);
-                            }
-                        }
-                        matchesNormal = sp.getStructuralSlots().equals(patternWithC);
-                        
-                        List<String> flippedWithC = new ArrayList<String>();
-                        for (String token : flippedPattern) {
-                            if (token.equals("[1]") || token.equals("[2]")) {
-                                flippedWithC.add("[C]");
-                            } else {
-                                flippedWithC.add(token);
-                            }
-                        }
-                        matchesFlipped = sp.getStructuralSlots().equals(flippedWithC);
-                    }
-                    
-                    if (matchesNormal || matchesFlipped) {
-                        rp.setFamily(family);
-                        familyAssigned = true;
-                        break;
-                    }
-                }
-            }
-        }
-    }
+    families = patternFamilyManager.get(structuralEquivalents, patternFamilyBuilder);
     
+    for (Pattern p : allPatterns) {
+      if (!(p instanceof Content)) continue;
+      Content rp = (Content) p;
+      
+      if (rp.getFamilyId() != null) {
+        continue;
+      }
+      if (rp.getConcreteExamples().isEmpty()) {
+        continue;
+      }
+      
+      boolean familyAssigned = false;
+      for (PatternFamily family : families) {
+        if (familyAssigned) break;
+        
+        for (List<String> seq : rp.getConcreteExamples()) {
+          if (familyAssigned) break;
+          
+          Data abstractPattern = SequenceTransformer.abstractSequencePF(seq, rp.getT1(), rp.getT2());
+          Data flippedPattern = SequenceTransformer.flipTermPatternWithTerms(abstractPattern, rp.getT1(), rp.getT2());
+          
+          for (Structure sp : family.getMemberPatterns()) {
+            Data familyPattern = sp.getData();
+            boolean matchesNormal = familyPattern.equals(abstractPattern);
+            boolean matchesFlipped = rp.isCommutative() && familyPattern.equals(flippedPattern);
+            
+            if (!matchesNormal && !matchesFlipped && rp.isCommutative()) {
+              Data patternWithC = new Data();
+              for (int i = 0; i < abstractPattern.size(); i++) {
+                if (abstractPattern.isPlaceholder(i)) {
+                  SlotFlag flag = abstractPattern.getPlaceholderAt(i);
+                  if (flag == SlotFlag._1 || flag == SlotFlag._2) {
+                    patternWithC.addPlaceholder(SlotFlag._C);
+                  } else {
+                    patternWithC.addPlaceholder(flag);
+                  }
+                } else if (abstractPattern.isToken(i)) {
+                  patternWithC.addToken(abstractPattern.getTokenAt(i));
+                } else if (abstractPattern.isPFToken(i)) {
+                  patternWithC.addPFToken(abstractPattern.getPFTokenAt(i));
+                }
+              }
+              matchesNormal = familyPattern.equals(patternWithC);
+              
+              Data flippedWithC = new Data();
+              for (int i = 0; i < flippedPattern.size(); i++) {
+                if (flippedPattern.isPlaceholder(i)) {
+                  SlotFlag flag = flippedPattern.getPlaceholderAt(i);
+                  if (flag == SlotFlag._1 || flag == SlotFlag._2) {
+                    flippedWithC.addPlaceholder(SlotFlag._C);
+                  } else {
+                    flippedWithC.addPlaceholder(flag);
+                  }
+                } else if (flippedPattern.isToken(i)) {
+                  flippedWithC.addToken(flippedPattern.getTokenAt(i));
+                } else if (flippedPattern.isPFToken(i)) {
+                  flippedWithC.addPFToken(flippedPattern.getPFTokenAt(i));
+                }
+              }
+              matchesFlipped = familyPattern.equals(flippedWithC);
+            }
+            
+            if (matchesNormal || matchesFlipped) {
+              rp.setFamily(family);
+              familyAssigned = true;
+              break;
+            }
+          }
+        }
+      }
+    }
+
     if (!optionals.isEmpty()) {
-        List<String> sortedOpt = new ArrayList<String>(optionals);
-        Collections.sort(sortedOpt);
-        System.out.println("   Optionals: " + sortedOpt);
+      List<String> sortedOpt = new ArrayList<String>(optionals);
+      Collections.sort(sortedOpt);
+      System.out.println("   Optionals: " + sortedOpt);
     }
 
     if (newPairs != null && !newPairs.isEmpty()) {
-        Set<String> newEquivalentsStrings = new HashSet<String>();
-        for (StructuralEquivalenceDetector.EquivalencePair pair : newPairs) {
-            newEquivalentsStrings.add(pair.toString());
-        }
-        List<String> sortedEquivs = new ArrayList<String>(newEquivalentsStrings);
-        Collections.sort(sortedEquivs);
-        System.out.println("   Structural equivalents: " + sortedEquivs);
+      Set<String> newEquivalentsStrings = new HashSet<String>();
+      for (StructuralEquivalenceDetector.EquivalencePair pair : newPairs) {
+        newEquivalentsStrings.add(pair.toString());
+      }
+      List<String> sortedEquivs = new ArrayList<String>(newEquivalentsStrings);
+      Collections.sort(sortedEquivs);
+      System.out.println("   Structural equivalents: " + sortedEquivs);
     }
-}
+  }
 
-  // NEW: Get current patterns for detection (from families)
-  private List<Pattern> getCurrentPatternsForDetection() {
+  private List<Pattern> scan() {
     List<Pattern> patternsForDetection = new ArrayList<Pattern>();
-    
-    // Add relation patterns
     patternsForDetection.addAll(allPatterns);
-    
-    // Add structural patterns from families
-    List<PatternFamily> families = patternFamilyManager.getPatternFamilies(
-        structuralEquivalents, patternFamilyBuilder);
-    
+
+    List<PatternFamily> families =
+        patternFamilyManager.get(structuralEquivalents, patternFamilyBuilder);
+
     for (PatternFamily family : families) {
-        for (Structure sp : family.getMemberPatterns()) {
-            patternsForDetection.add(sp);
-        }
+      for (Structure sp : family.getMemberPatterns()) {
+        patternsForDetection.add(sp);
+      }
     }
-    
+
     return patternsForDetection;
   }
 
-  // NEW: Update families with temporary patterns
-  private void updateFamiliesWithPatterns(List<Structure> tempPatterns, String term1, String term2) {
+  private void updateFamiliesWithPatterns(
+      List<Structure> tempPatterns, String term1, String term2) {
     if (tempPatterns.isEmpty()) return;
-    
+
     familiesDirty = true;
-    patternFamilyManager.updateFamiliesWithPatterns(tempPatterns, structuralEquivalents);
+    patternFamilyManager.update(tempPatterns, structuralEquivalents);
   }
 
   private void updateAllFamiliesWithNewEquivalents() {
-    List<PatternFamily> families = patternFamilyManager.getPatternFamilies(structuralEquivalents, patternFamilyBuilder);
+    List<PatternFamily> families =
+        patternFamilyManager.get(structuralEquivalents, patternFamilyBuilder);
     for (PatternFamily family : families) {
-        family.updateAliases(structuralEquivalents);
+      family.updateAliases(structuralEquivalents);
     }
     familiesDirty = true;
   }
 
-  private Content findOrCreatePatternForFamily(String term1, String term2, PatternFamily family, boolean isCommutative) {
+  private Content findOrCreatePatternForFamily(
+      String term1, String term2, PatternFamily family, boolean isCommutative) {
     if (family == null) {
-        return findOrCreatePattern(term1, term2);
+      return findOrCreatePattern(term1, term2);
     }
-    
+
     String key = term1 + "|" + term2;
     Content existing = relationPatternsByKey.get(key);
-    
+
     if (existing != null) {
-        if (family == null || (existing.getFamilyId() != null && existing.getFamilyId().equals(family.getId()))) {
-            existing.updateTimestamp();
-            return existing;
-        }
+      if (family == null
+          || (existing.getFamilyId() != null && existing.getFamilyId().equals(family.getId()))) {
+        existing.updateTimestamp();
+        return existing;
+      }
     }
-    
+
     if (isCommutative) {
-        String reverseKey = term2 + "|" + term1;
-        existing = relationPatternsByKey.get(reverseKey);
-        if (existing != null && existing.isCommutative()) {
-            if (family == null || (existing.getFamilyId() != null && existing.getFamilyId().equals(family.getId()))) {
-                existing.updateTimestamp();
-                return existing;
-            }
+      String reverseKey = term2 + "|" + term1;
+      existing = relationPatternsByKey.get(reverseKey);
+      if (existing != null && existing.isCommutative()) {
+        if (family == null
+            || (existing.getFamilyId() != null && existing.getFamilyId().equals(family.getId()))) {
+          existing.updateTimestamp();
+          return existing;
         }
+      }
     }
-    
+
     Content newPattern = new Content("RP" + allPatterns.size(), term1, term2);
     newPattern.setFamily(family);
     newPattern.setCommutative(isCommutative);
@@ -628,26 +625,26 @@ public class PatternProcessor {
     allPatterns.add(newPattern);
     addToRelationMaps(newPattern);
     familiesDirty = true;
-    
+
     return newPattern;
   }
 
   private Content findOrCreatePattern(String term1, String term2) {
     String key = term1 + "|" + term2;
     Content existing = relationPatternsByKey.get(key);
-    
+
     if (existing != null) {
-        existing.updateTimestamp();
-        return existing;
+      existing.updateTimestamp();
+      return existing;
     }
-    
+
     String reverseKey = term2 + "|" + term1;
     existing = relationPatternsByKey.get(reverseKey);
     if (existing != null && existing.isCommutative()) {
-        existing.updateTimestamp();
-        return existing;
+      existing.updateTimestamp();
+      return existing;
     }
-    
+
     Content newPattern = new Content("RP" + allPatterns.size(), term1, term2);
     newPattern.setFrequency(0);
     allPatterns.add(newPattern);
@@ -657,317 +654,396 @@ public class PatternProcessor {
   }
 
   private void attemptCollapseAndAnalysis(List<List<String>> originalSequences) {
-    Set<String> protectedWords = new HashSet<String>();
-    Set<String> allBatchWords = getAllWords(originalSequences);
-    allBatchWords.removeAll(optionalFinder.getOptionals());
+    Set<String> protectedTokens = new HashSet<String>();
+    Set<String> allBatchTokens = getAllTokens(originalSequences);
+    allBatchTokens.removeAll(optionalFinder.get());
 
-    ContentFinder rawContentFinder = new ContentFinder(optionalFinder, bigramAnalyzer);
-    Set<String> batchContentWords = rawContentFinder.identifyContentWords(originalSequences, null);
-    
-    if (batchContentWords.size() < 2) {
-        batchContentWords = rawContentFinder.runAnyMovementCheck(originalSequences, null);
+    ContentFinder rawContentFinder = new ContentFinder(optionalFinder, gramAnalyzer);
+    Set<String> batchContentTokens = rawContentFinder.identifyContent(originalSequences, null);
+
+    if (batchContentTokens.size() < 2) {
+      batchContentTokens = rawContentFinder.checkMovement(originalSequences, null);
     }
-    
-    for (String word : allBatchWords) {
-        if (!batchContentWords.contains(word)) {
-            protectedWords.add(word);
-        }
+
+    for (String token : allBatchTokens) {
+      if (!batchContentTokens.contains(token)) {
+        protectedTokens.add(token);
+      }
     }
-    
-    List<List<String>> collapsedSequences = collapseSequences(originalSequences, protectedWords);
-    
+
+    List<List<String>> collapsedSequences = collapseSequences(originalSequences, protectedTokens);
+
     if (collapsedSequences != null && !collapsedSequences.isEmpty()) {
-        if (collapsedSequences.get(0).size() <= 1) {
-            System.out.println("   [System: Sequence recognized as existing family instance: " + collapsedSequences.get(0) + "]");
-            assignRolesFromFamilyMatch(originalSequences);
-            return;
-        }
-        
-        System.out.println("   [System: Sequence collapsed for higher-level analysis: " + collapsedSequences.get(0) + "]");
-        System.out.println("   [System: Composite patterns are no longer supported. Treating as regular pattern.]");
-        processEquivalenceSet(originalSequences);
+      if (collapsedSequences.get(0).size() <= 1) {
+        System.out.println(
+            "   [System: Sequence recognized as existing family instance: "
+                + collapsedSequences.get(0)
+                + "]");
+        assignRolesFromFamilyMatch(originalSequences);
         return;
+      }
+
+      System.out.println(
+          "   [System: Sequence collapsed for higher-level analysis: "
+              + collapsedSequences.get(0)
+              + "]");
+      System.out.println(
+          "   [System: Composite patterns are no longer supported. Treating as regular pattern.]");
+      processEquivalenceSet(originalSequences);
+      return;
     }
-    
+
     System.out.println("   Set is ambiguous and cannot be collapsed.");
   }
 
   private void assignRolesFromFamilyMatch(List<List<String>> sequences) {
-      List<PatternFamily> families = patternFamilyManager.getPatternFamilies(structuralEquivalents, patternFamilyBuilder);
-      for (List<String> sequence : sequences) {
-          boolean matchedSequence = false;
-          for (PatternFamily family : families) {
-              if (matchedSequence) break;
-              for (Structure sp : family.getMemberPatterns()) {
-                  List<String> slots = sp.getStructuralSlots();
-                  if (sequence.size() != slots.size()) continue;
-                  if (PatternMatcher.isSubSequenceMatch(sequence, 0, slots, family, new HashSet<String>())) {
-                      for (int i = 0; i < slots.size(); i++) {
-                          String slot = slots.get(i);
-                          String word = sequence.get(i);
-                          if (slot.equals("[1]")) {
-                              addSymbolRole(word, "1");
-                              addSymbolRole(word, "C");
-                          } else if (slot.equals("[2]")) {
-                              addSymbolRole(word, "2");
-                              addSymbolRole(word, "C");
-                          } else if (slot.equals("[C]") || slot.equals("[X]")) {
-                              addSymbolRole(word, "C");
-                          }
-                      }
-                      matchedSequence = true;
-                      break; 
-                  }
+    List<PatternFamily> families =
+        patternFamilyManager.get(structuralEquivalents, patternFamilyBuilder);
+    for (List<String> sequence : sequences) {
+      boolean matchedSequence = false;
+      for (PatternFamily family : families) {
+        if (matchedSequence) break;
+        for (Structure sp : family.getMemberPatterns()) {
+          Data data = sp.getData();
+          if (sequence.size() != data.size()) continue;
+          if (PatternMatcher.isSubSequenceMatch(
+              sequence, 0, data, family, new HashSet<String>())) {
+            for (int i = 0; i < data.size(); i++) {
+              if (data.isPlaceholder(i)) {
+                SlotFlag flag = data.getPlaceholderAt(i);
+                String token = sequence.get(i);
+                if (flag == SlotFlag._1) {
+                  addSymbolRole(token, "1");
+                  addSymbolRole(token, "C");
+                } else if (flag == SlotFlag._2) {
+                  addSymbolRole(token, "2");
+                  addSymbolRole(token, "C");
+                } else if (flag == SlotFlag._C || flag == SlotFlag._X) {
+                  addSymbolRole(token, "C");
+                }
               }
+            }
+            matchedSequence = true;
+            break;
           }
+        }
       }
+    }
   }
 
-  private void addSymbolRole(String word, String role) {
-      if (!word.startsWith("PF") && symbolManager.getSymbols().containsKey(word)) {
-          symbolManager.getSymbols().get(word).relations.add(role);
-      }
+  private void addSymbolRole(String token, String role) {
+    if (!token.startsWith("PF") && symbolManager.getSymbols().containsKey(token)) {
+      symbolManager.getSymbols().get(token).relations.add(role);
+    }
   }
-  
+
   private Set<String> getBaseTermsForSyntheticToken(String token) {
     if (!token.startsWith("PF")) return Collections.singleton(token);
-    List<PatternFamily> families = patternFamilyManager.getPatternFamilies(structuralEquivalents, patternFamilyBuilder);
+    List<PatternFamily> families =
+        patternFamilyManager.get(structuralEquivalents, patternFamilyBuilder);
     PatternFamily targetFamily = null;
     for (PatternFamily f : families) {
-        if (f.getId().equals(token)) { targetFamily = f; break; }
+      if (f.getId().equals(token)) {
+        targetFamily = f;
+        break;
+      }
     }
     Set<String> baseTerms = new HashSet<String>();
     if (targetFamily != null) {
-        for (Pattern p : allPatterns) {
-            if (p instanceof Content) {
-                Content rp = (Content) p;
-                if (rp.getFamilyId() != null && rp.getFamilyId().equals(token)) {
-                    baseTerms.add(rp.getT1()); baseTerms.add(rp.getT2());
-                }
-            }
+      for (Pattern p : allPatterns) {
+        if (p instanceof Content) {
+          Content rp = (Content) p;
+          if (rp.getFamilyId() != null && rp.getFamilyId().equals(token)) {
+            baseTerms.add(rp.getT1());
+            baseTerms.add(rp.getT2());
+          }
         }
-    } else { baseTerms.add(token); }
+      }
+    } else {
+      baseTerms.add(token);
+    }
     Set<String> finalBaseTerms = new HashSet<String>();
     for (String term : baseTerms) {
-        if (term.startsWith("PF")) finalBaseTerms.addAll(getBaseTermsForSyntheticToken(term));
-        else finalBaseTerms.add(term);
+      if (term.startsWith("PF")) finalBaseTerms.addAll(getBaseTermsForSyntheticToken(term));
+      else finalBaseTerms.add(term);
     }
     return finalBaseTerms;
   }
 
-  private Set<String> getAllWords(List<List<String>> sequences) {
-    Set<String> allWords = new HashSet<String>();
-    for (List<String> sequence : sequences) allWords.addAll(sequence);
-    return allWords;
+  private Set<String> getAllTokens(List<List<String>> sequences) {
+    Set<String> allTokens = new HashSet<String>();
+    for (List<String> sequence : sequences) allTokens.addAll(sequence);
+    return allTokens;
   }
 
-  private String[] selectTermsByClosestCompanion(Set<String> contentWords, List<List<String>> sequences, Map<String, Set<Integer>> wordPositions, Set<String> structuralWords) {
-    if (contentWords.size() < 2) return null;
-    Set<String> filteredContentWords = new HashSet<String>(contentWords);
-    filteredContentWords.removeAll(structuralWords);
-    filteredContentWords.removeAll(optionalFinder.getOptionals());
-    if (filteredContentWords.size() < 2) filteredContentWords = new HashSet<String>(contentWords);
-    List<String> contentList = new ArrayList<String>(filteredContentWords);
-    Collections.sort(contentList);
-    return new String[] {contentList.get(0), contentList.get(1)};
-  }
-
-  private Set<String> identifyStructuralWords(List<List<String>> equivalentSequences, Set<String> contentWords) {
-    Set<String> structuralWords = new LinkedHashSet<String>();
+  private Set<String> identifyStructuralTokens(
+      List<List<String>> equivalentSequences, Set<String> contentTokens) {
+    Set<String> structuralTokens = new LinkedHashSet<String>();
     for (List<String> sequence : equivalentSequences) {
-        for (String word : sequence) {
-            if (!contentWords.contains(word)) structuralWords.add(word);
-        }
+      for (String token : sequence) {
+        if (!contentTokens.contains(token)) structuralTokens.add(token);
+      }
     }
-    return structuralWords;
+    return structuralTokens;
   }
 
-  private String[] determinePositionalTerms(String w1, String w2, List<List<String>> equivalentSequences) {
-    int w1_left_of_w2 = 0;
-    int w2_left_of_w1 = 0;
-    for (List<String> sequence : equivalentSequences) {
-        int idx1 = sequence.indexOf(w1);
-        int idx2 = sequence.indexOf(w2);
-        if (idx1 != -1 && idx2 != -1) {
-            if (idx1 < idx2) w1_left_of_w2++; else if (idx2 < idx1) w2_left_of_w1++;
-        }
+  private String[] determinePositionalTerms(
+    String w1, String w2, List<List<String>> equivalentSequences) {
+  int w1_left_of_w2 = 0;
+  int w2_left_of_w1 = 0;
+  for (List<String> sequence : equivalentSequences) {
+    int idx1 = sequence.indexOf(w1);
+    int idx2 = sequence.indexOf(w2);
+    if (idx1 != -1 && idx2 != -1) {
+      if (idx1 < idx2) w1_left_of_w2++;
+      else if (idx2 < idx1) w2_left_of_w1++;
     }
-    return w2_left_of_w1 > w1_left_of_w2 ? new String[] {w2, w1} : new String[] {w1, w2};
   }
-
-  private boolean isCommutative(List<List<String>> equivalentSequences, String term1, String term2) {
-    Set<List<String>> patterns = new HashSet<List<String>>();
-    for (List<String> sequence : equivalentSequences) patterns.add(SequenceTransformer.abstractSequencePF(sequence, term1, term2));
-    Set<List<String>> flippedPatterns = new HashSet<List<String>>();
-    for (List<String> pattern : patterns) flippedPatterns.add(SequenceTransformer.flipTermPatternWithTerms(pattern, term1, term2));
-    return patterns.containsAll(flippedPatterns) && flippedPatterns.containsAll(patterns);
+  if (w2_left_of_w1 > w1_left_of_w2) {
+    return new String[] {w2, w1};
+  } else {
+    return new String[] {w1, w2};
   }
+}
 
-  private void addDiscoveredEquivalents(Set<StructuralEquivalenceDetector.EquivalencePair> newPairs) {
+  private boolean isCommutative(
+    List<List<String>> equivalentSequences, String term1, String term2) {
+  
+  // Self-relation is automatically commutative
+  if (term1 != null && term2 != null && term1.equals(term2)) {
+    return true;
+  }
+  
+  Set<Data> patterns = new HashSet<Data>();
+  for (List<String> sequence : equivalentSequences) {
+    Data abstractPattern = SequenceTransformer.abstractSequencePF(sequence, term1, term2);
+    patterns.add(abstractPattern);
+  }
+  
+  Set<Data> flippedPatterns = new HashSet<Data>();
+  for (Data pattern : patterns) {
+    Data flipped = SequenceTransformer.flipTermPattern(pattern);
+    flippedPatterns.add(flipped);
+  }
+  
+  boolean isComm = patterns.containsAll(flippedPatterns) && flippedPatterns.containsAll(patterns);
+  
+  return isComm;
+}
+
+  private void addDiscoveredEquivalents(
+      Set<StructuralEquivalenceDetector.EquivalencePair> newPairs) {
     if (!newPairs.isEmpty()) {
       familiesDirty = true;
-      for (StructuralEquivalenceDetector.EquivalencePair pair : newPairs) addStructuralEquivalence(pair.w1, pair.w2);
+      for (StructuralEquivalenceDetector.EquivalencePair pair : newPairs)
+        addStructuralEquivalence(pair.w1, pair.w2);
     }
   }
 
-  // CHANGED: Return temporary patterns instead of storing in allPatterns
-  private List<Structure> extractStructures(List<List<String>> equivalentSequences, String term1, String term2) {
-    Map<List<String>, Integer> patternCounts = new HashMap<List<String>, Integer>();
-    for (List<String> sequence : equivalentSequences) {
-      List<String> abstractPattern = SequenceTransformer.abstractSequencePF(sequence, term1, term2);
-      patternCounts.put(abstractPattern, patternCounts.get(abstractPattern) == null ? 1 : patternCounts.get(abstractPattern) + 1);
-    }
+  private List<Structure> extractStructures(
+    List<List<String>> equivalentSequences, String term1, String term2) {
+  
+  String[] positionalTerms = determinePositionalTerms(term1, term2, equivalentSequences);
+  String actualT1 = positionalTerms[0];
+  String actualT2 = positionalTerms[1];
+  
+  boolean isCommutative = isCommutative(equivalentSequences, actualT1, actualT2);
+  
+  Map<Data, Integer> patternCounts = new HashMap<Data, Integer>();
+  for (List<String> sequence : equivalentSequences) {
+    Data abstractPattern = SequenceTransformer.abstractSequencePF(sequence, actualT1, actualT2);
+    patternCounts.put(abstractPattern,
+        patternCounts.get(abstractPattern) == null ? 1 : patternCounts.get(abstractPattern) + 1);
+  }
+
+  List<Structure> tempPatterns = new ArrayList<Structure>();
+
+  for (Map.Entry<Data, Integer> entry : patternCounts.entrySet()) {
+    Data pattern = entry.getKey();
     
-    boolean isCommutative = isCommutative(equivalentSequences, term1, term2);
-    
-    List<Structure> tempPatterns = new ArrayList<Structure>();
-    
-    for (Entry<List<String>, Integer> entry : patternCounts.entrySet()) {
-      List<String> finalSlots = PatternSlotFiller.createFinalPatternSlots(entry.getKey(), term1, term2, isCommutative);
-      Structure newPattern = new Structure("TEMP", finalSlots);
-      newPattern.setFrequency(1);
-      newPattern.setCommutative(isCommutative);
-      
-      // Add concrete examples to track actual occurrences
-      for (List<String> sequence : equivalentSequences) {
-        List<String> abstractSeq = SequenceTransformer.abstractSequencePF(sequence, term1, term2);
-        if (abstractSeq.equals(entry.getKey())) {
-          newPattern.addConcreteExample(sequence);
+    if (!isCommutative) {
+      int firstPlaceholder = -1;
+      for (int i = 0; i < pattern.size(); i++) {
+        if (pattern.isPlaceholder(i)) {
+          if (firstPlaceholder == -1) firstPlaceholder = i;
         }
       }
       
-      tempPatterns.add(newPattern);
+      if (firstPlaceholder != -1 && pattern.getPlaceholderAt(firstPlaceholder) == SlotFlag._2) {
+        pattern = SequenceTransformer.flipTermPattern(pattern);
+      }
     }
     
-    return tempPatterns;
+    Data finalData = PatternSlotFiller.finalize(pattern, actualT1, actualT2, isCommutative);
+    Structure newPattern = new Structure("TEMP");
+    Data newData = newPattern.getData();
+    
+    for (int i = 0; i < finalData.size(); i++) {
+      if (finalData.isPlaceholder(i)) {
+        newData.addPlaceholder(finalData.getPlaceholderAt(i));
+      } else if (finalData.isToken(i)) {
+        newData.addToken(finalData.getTokenAt(i));
+      } else if (finalData.isPFToken(i)) {
+        newData.addPFToken(finalData.getPFTokenAt(i));
+      }
+    }
+    
+    newPattern.setCommutative(isCommutative);
+    tempPatterns.add(newPattern);
   }
 
+  return tempPatterns;
+}
+
   private void addStructuralEquivalence(String w1, String w2) {
-    if (!structuralEquivalents.containsKey(w1)) structuralEquivalents.put(w1, new HashSet<String>());
-    if (!structuralEquivalents.containsKey(w2)) structuralEquivalents.put(w2, new HashSet<String>());
-    
+    if (!structuralEquivalents.containsKey(w1))
+      structuralEquivalents.put(w1, new HashSet<String>());
+    if (!structuralEquivalents.containsKey(w2))
+      structuralEquivalents.put(w2, new HashSet<String>());
+
     boolean changed1 = structuralEquivalents.get(w1).add(w2);
     boolean changed2 = structuralEquivalents.get(w2).add(w1);
-    
+
     if (changed1 || changed2) {
-        familiesDirty = true;
+      familiesDirty = true;
     }
-    
-    addSymbolRole(w1, "S"); 
+
+    addSymbolRole(w1, "S");
     addSymbolRole(w2, "S");
   }
 
-  public Set<String> getLearnedStructuralWords() {
+  public Set<String> getLearnedStructuralTokens() {
     Set<String> filtered = new HashSet<String>();
-    List<PatternFamily> families = patternFamilyManager.getPatternFamilies(structuralEquivalents, patternFamilyBuilder);
-    
+    List<PatternFamily> families =
+        patternFamilyManager.get(structuralEquivalents, patternFamilyBuilder);
+
     for (PatternFamily family : families) {
-        for (Structure sp : family.getMemberPatterns()) {
-            for (String word : sp.getStructuralSlots()) {
-                if (!word.equals("[1]") && !word.equals("[2]") && 
-                    !word.equals("[C]") && !word.equals("[X]") && 
-                    !word.startsWith("PF")) {
-                    filtered.add(word);
-                }
+      for (Structure sp : family.getMemberPatterns()) {
+        Data data = sp.getData();
+        for (int i = 0; i < data.size(); i++) {
+          if (data.isToken(i)) {
+            String token = data.getTokenAt(i);
+            if (!token.equals("[1]") && !token.equals("[2]") && !token.equals("[C]") && !token.equals("[X]") && !token.startsWith("PF")) {
+              filtered.add(token);
             }
+          } else if (data.isAlias(i)) {
+            String alias = data.getAliasAt(i);
+            if (!alias.equals("[1]") && !alias.equals("[2]") && !alias.equals("[C]") && !alias.equals("[X]") && !alias.startsWith("PF")) {
+              filtered.add(alias);
+            }
+          }
         }
+      }
     }
     return filtered;
   }
 
-  private void detectCrossDomainEquivalents(List<List<String>> equivalentSequences, String t1, String t2) {
-    Set<StructuralEquivalenceDetector.EquivalencePair> crossDomainPairs = equivalenceDetector.detectStructuralEquivalents(equivalentSequences, getLearnedStructuralWords(), t1, t2, getCurrentPatternsForDetection());
+  private void detectCrossDomainEquivalents(
+      List<List<String>> equivalentSequences, String t1, String t2) {
+    Set<StructuralEquivalenceDetector.EquivalencePair> crossDomainPairs =
+        equivalenceDetector.detectStructuralEquivalents(
+            equivalentSequences, getLearnedStructuralTokens(), t1, t2, scan());
     if (!crossDomainPairs.isEmpty()) {
-        System.out.println("   [System: Found " + crossDomainPairs.size() + " cross-domain equivalents]");
-        addDiscoveredEquivalents(crossDomainPairs);
+      System.out.println(
+          "   [System: Found " + crossDomainPairs.size() + " cross-domain equivalents]");
+      addDiscoveredEquivalents(crossDomainPairs);
     }
   }
 
   public void reevaluateEquivalents() {
-    Set<StructuralEquivalenceDetector.EquivalencePair> pairsToRemove = new HashSet<StructuralEquivalenceDetector.EquivalencePair>();
+    Set<StructuralEquivalenceDetector.EquivalencePair> pairsToRemove =
+        new HashSet<StructuralEquivalenceDetector.EquivalencePair>();
     for (Entry<String, Set<String>> entry : structuralEquivalents.entrySet()) {
       for (String w2 : entry.getValue()) {
-        if (equivalenceDetector.areNeighbors(entry.getKey(), w2)) pairsToRemove.add(equivalenceDetector.createEquivalencePair(entry.getKey(), w2));
+        if (equivalenceDetector.areNeighbors(entry.getKey(), w2))
+          pairsToRemove.add(equivalenceDetector.createEquivalencePair(entry.getKey(), w2));
       }
     }
     boolean changed = false;
     for (StructuralEquivalenceDetector.EquivalencePair pair : pairsToRemove) {
-      if (structuralEquivalents.containsKey(pair.w1) && structuralEquivalents.get(pair.w1).remove(pair.w2)) {
-          if (structuralEquivalents.get(pair.w1).isEmpty()) structuralEquivalents.remove(pair.w1); changed = true;
+      if (structuralEquivalents.containsKey(pair.w1)
+          && structuralEquivalents.get(pair.w1).remove(pair.w2)) {
+        if (structuralEquivalents.get(pair.w1).isEmpty()) structuralEquivalents.remove(pair.w1);
+        changed = true;
       }
-      if (structuralEquivalents.containsKey(pair.w2) && structuralEquivalents.get(pair.w2).remove(pair.w1)) {
-          if (structuralEquivalents.get(pair.w2).isEmpty()) structuralEquivalents.remove(pair.w2); changed = true;
+      if (structuralEquivalents.containsKey(pair.w2)
+          && structuralEquivalents.get(pair.w2).remove(pair.w1)) {
+        if (structuralEquivalents.get(pair.w2).isEmpty()) structuralEquivalents.remove(pair.w2);
+        changed = true;
       }
     }
     if (changed) {
-        System.out.println("   [System: Reevaluated structural equivalents based on context.]");
-        familiesDirty = true;
+      System.out.println("   [System: Reevaluated structural equivalents based on context.]");
+      familiesDirty = true;
     }
   }
 
-  private List<List<String>> collapseSequences(List<List<String>> sequences, Set<String> protectedWords) {
-    List<PatternFamily> families = patternFamilyManager.getPatternFamilies(structuralEquivalents, patternFamilyBuilder);
+  private List<List<String>> collapseSequences(
+      List<List<String>> sequences, Set<String> protectedTokens) {
+    List<PatternFamily> families =
+        patternFamilyManager.get(structuralEquivalents, patternFamilyBuilder);
     if (families.isEmpty()) return null;
     List<List<String>> collapsedList = new ArrayList<List<String>>();
     boolean anyChange = false;
     for (List<String> sequence : sequences) {
-        List<String> collapsed = collapseSequence(sequence, families, protectedWords);
-        if (collapsed.size() < sequence.size()) anyChange = true;
-        collapsedList.add(collapsed);
+      List<String> collapsed = collapseSequence(sequence, families, protectedTokens);
+      if (collapsed.size() < sequence.size()) anyChange = true;
+      collapsedList.add(collapsed);
     }
     return anyChange ? collapsedList : null;
   }
 
-  private List<String> collapseSequence(List<String> sequence, List<PatternFamily> families, Set<String> protectedWords) {
+  private List<String> collapseSequence(
+      List<String> sequence, List<PatternFamily> families, Set<String> protectedTokens) {
     List<String> currentSequence = new ArrayList<String>(sequence);
     boolean changeOccurred = true;
     while (changeOccurred) {
-        changeOccurred = false;
-        int bestMatchStart = -1, bestMatchLength = -1;
-        String bestFamilyId = null;
-        for (PatternFamily family : families) {
-            for (Structure sp : family.getMemberPatterns()) {
-                List<String> slots = sp.getStructuralSlots();
-                for (int i = 0; i <= currentSequence.size() - slots.size(); i++) {
-                     if (PatternMatcher.isSubSequenceMatch(currentSequence, i, slots, family, protectedWords)) {
-                         if (slots.size() > bestMatchLength) { bestMatchLength = slots.size(); bestMatchStart = i; bestFamilyId = family.getId(); }
-                     }
-                }
+      changeOccurred = false;
+      int bestMatchStart = -1, bestMatchLength = -1;
+      String bestFamilyId = null;
+      for (PatternFamily family : families) {
+        for (Structure sp : family.getMemberPatterns()) {
+          Data data = sp.getData();
+          for (int i = 0; i <= currentSequence.size() - data.size(); i++) {
+            if (PatternMatcher.isSubSequenceMatch(
+                currentSequence, i, data, family, protectedTokens)) {
+              if (data.size() > bestMatchLength) {
+                bestMatchLength = data.size();
+                bestMatchStart = i;
+                bestFamilyId = family.getId();
+              }
             }
+          }
         }
-        if (bestMatchStart != -1) {
-            List<String> nextSequence = new ArrayList<String>(currentSequence.subList(0, bestMatchStart));
-            nextSequence.add(bestFamilyId);
-            nextSequence.addAll(currentSequence.subList(bestMatchStart + bestMatchLength, currentSequence.size()));
-            currentSequence = nextSequence; changeOccurred = true;
-        }
+      }
+      if (bestMatchStart != -1) {
+        List<String> nextSequence =
+            new ArrayList<String>(currentSequence.subList(0, bestMatchStart));
+        nextSequence.add(bestFamilyId);
+        nextSequence.addAll(
+            currentSequence.subList(bestMatchStart + bestMatchLength, currentSequence.size()));
+        currentSequence = nextSequence;
+        changeOccurred = true;
+      }
     }
     return currentSequence;
   }
 
   public boolean hasCommutativeCollapse(List<String> sequence) {
-    List<PatternFamily> families = patternFamilyManager.getPatternFamilies(structuralEquivalents, patternFamilyBuilder);
+    List<PatternFamily> families =
+        patternFamilyManager.get(structuralEquivalents, patternFamilyBuilder);
     if (families.isEmpty()) return false;
     List<String> collapsed = collapseSequence(sequence, families, new HashSet<String>());
     if (collapsed.size() == sequence.size()) return false;
     for (String token : collapsed) {
-        if (token.startsWith("PF")) {
-            for (PatternFamily f : families) {
-                if (f.getId().equals(token)) {
-                    for (Structure sp : f.getMemberPatterns()) if (sp.isCommutative()) return true;
-                }
-            }
+      if (token.startsWith("PF")) {
+        for (PatternFamily f : families) {
+          if (f.getId().equals(token)) {
+            for (Structure sp : f.getMemberPatterns()) if (sp.isCommutative()) return true;
+          }
         }
+      }
     }
     return false;
-  }
-  
-  private PatternFamily findFamilyById(String id, List<PatternFamily> families) {
-    for (PatternFamily family : families) {
-        if (family.getId().equals(id)) {
-            return family;
-        }
-    }
-    return null;
   }
 }

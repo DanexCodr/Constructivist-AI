@@ -33,6 +33,10 @@ public class Test {
                 "if hungry eat",
                 "eat if hungry",
                 "if hungry then eat",
+                "1 + 2 = 3",
+                "2 + 1 = 3",
+                "7 + 7 = 14",
+                "14 = 7 + 7",
                 "",
                 "v",
                 "a",
@@ -109,11 +113,7 @@ public class Test {
 
         private void emitCurrentLine() {
             String line = new String(lineBuffer.toByteArray(), StandardCharsets.UTF_8);
-            if (line.length() == 0) {
-                // Make consumed blank input visible in the auto-run transcript.
-                line = "<empty>";
-            }
-            System.out.println("  " + line);
+            System.out.println(line);
             lineBuffer.reset();
         }
 

@@ -3,48 +3,44 @@ package danexcodr.ai.util;
 import java.util.*;
 
 public class Combinatorics {
-    
-public static List<List<String>> generateCombinations(List<Set<String>> slots) {
-    List<List<String>> combinations = new ArrayList<List<String>>();
-    combinations.add(new ArrayList<String>());
 
-    for (Set<String> slotOptions : slots) {
-        if (slotOptions == null || slotOptions.isEmpty()) {
-            continue;
-        }
+  public static List<List<Object>> generate(List<Set<Object>> slots) {
+    List<List<Object>> combinations = new ArrayList<List<Object>>();
+    combinations.add(new ArrayList<Object>());
 
-        List<List<String>> newCombinations = new ArrayList<List<String>>();
-        
-        if (combinations.isEmpty()) {
-            for (String option : slotOptions) {
-                List<String> newCombo = new ArrayList<String>();
-                newCombo.add(option);
-                newCombinations.add(newCombo);
-            }
-        } else {
-            for (List<String> combo : combinations) {
-                for (String option : slotOptions) {
-                    List<String> newCombo = new ArrayList<String>(combo);
-                    newCombo.add(option);
-                    newCombinations.add(newCombo);
-                }
-            }
+    for (Set<Object> slotOptions : slots) {
+      if (slotOptions == null || slotOptions.isEmpty()) {
+        continue;
+      }
+
+      List<List<Object>> newCombinations = new ArrayList<List<Object>>();
+
+      if (combinations.isEmpty()) {
+        for (Object option : slotOptions) {
+          List<Object> newCombo = new ArrayList<Object>();
+          newCombo.add(option);
+          newCombinations.add(newCombo);
         }
-        combinations = newCombinations;
+      } else {
+        for (List<Object> combo : combinations) {
+          for (Object option : slotOptions) {
+            List<Object> newCombo = new ArrayList<Object>(combo);
+            newCombo.add(option);
+            newCombinations.add(newCombo);
+          }
+        }
+      }
+      combinations = newCombinations;
     }
-    
+
     return combinations;
-}
-    
-    public static List<List<String>> generateCartesianProduct(List<Set<String>> sets) {
-        return generateCombinations(sets);
+  }
+
+  public static Set<List<Object>> deduplicate(List<List<Object>> combinations) {
+    Set<List<Object>> uniqueCombinations = new LinkedHashSet<List<Object>>();
+    for (List<Object> combo : combinations) {
+      uniqueCombinations.add(combo);
     }
-    
-    public static Set<List<String>> deduplicateCombinations(List<List<String>> combinations) {
-        Set<List<String>> uniqueCombinations = new LinkedHashSet<List<String>>();
-        for (List<String> combo : combinations) {
-            uniqueCombinations.add(combo);
-        }
-        return uniqueCombinations;
-    }
+    return uniqueCombinations;
+  }
 }
