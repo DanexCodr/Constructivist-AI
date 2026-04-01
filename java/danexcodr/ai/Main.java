@@ -26,7 +26,7 @@ public class Main {
   }
 
   private String formatTimestamp(long timestamp) {
-    return new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+    return new java.text.SimpleDateFormat(Config.TIMESTAMP_PATTERN)
         .format(new java.util.Date(timestamp));
   }
 
@@ -499,7 +499,7 @@ public Main() {
 
   public void run() {
     System.out.println("Constructivist AI - Learn from equivalent sequences");
-    System.out.println("Commands: [l]earn, [p]rocess, [a]nalyze, [g]enerate, [v]iew, [q]uit");
+    System.out.println(Config.MAIN_COMMANDS_TEXT);
 
     UnsupervisedClusterer clusterer = new UnsupervisedClusterer(this);
 

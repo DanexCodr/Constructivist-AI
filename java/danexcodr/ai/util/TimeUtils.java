@@ -1,11 +1,12 @@
 package danexcodr.ai.util;
 
+import danexcodr.ai.Config;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
 public class TimeUtils {
   private static final SimpleDateFormat TIMESTAMP_FORMAT =
-      new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+      new SimpleDateFormat(Config.TIMESTAMP_PATTERN);
 
   public static String format(long timestamp) {
     return TIMESTAMP_FORMAT.format(new Date(timestamp));
