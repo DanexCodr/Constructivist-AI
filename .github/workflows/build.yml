@@ -42,6 +42,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add constructivist_source.jar
+          git add -f constructivist_source.jar
           git diff --cached --quiet || git commit -m "chore: update constructivist_source.jar [skip ci]"
           git push
