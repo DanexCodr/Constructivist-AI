@@ -585,21 +585,56 @@ public Main() {
     sequence.setCurrentFamilies(families);
     sequence.setCurrentStructuralEquivalents(structuralEquivalents);
     sequence.setFamilyManager(familyManager);
+    sequence.setSymbolManager(symbolManager);
 
-    List<List<String>> results = sequence.infer(term1, term2);
+    List<List<String>> results = sequence.infer(term1, term2, true);
 
     if (results.isEmpty()) {
       System.out.println("   No sequences could be generated.");
     } else {
       System.out.println("   Generated " + results.size() + " unique sequences:");
-      Collections.sort(
-          results,
-          new Comparator<List<String>>() {
-            @Override
-            public int compare(List<String> o1, List<String> o2) {
-              return o1.toString().compareTo(o2.toString());
-            }
-          });
+      for (List<String> seq : results) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < seq.size(); i++) {
+          sb.append(seq.get(i));
+          if (i < seq.size() - 1) {
+            sb.append(" ");
+          }
+        }
+        System.out.println("     " + sb.toString());
+      }
+    }
+  }
+
+  private void handleAnalyze() {
+    System.out.println("       Enter terms:");
+    System.out.print("       1.  ");
+    String term1 = scanner.nextLine().trim();
+    System.out.print("       2.  ");
+    String term2 = scanner.nextLine().trim();
+
+    if (term1.isEmpty() || term2.isEmpty()) {
+      System.out.println("   Terms cannot be empty.");
+      return;
+    }
+
+    if (!term1.startsWith("PF")) symbolManager.ensureSymbolExists(term1);
+    if (!term2.startsWith("PF")) symbolManager.ensureSymbolExists(term2);
+
+    List<PatternFamily> families = familyManager.get(structuralEquivalents, familyBuilder);
+
+    Sequence sequence = new Sequence(allPatterns, patternProcessor);
+    sequence.setCurrentFamilies(families);
+    sequence.setCurrentStructuralEquivalents(structuralEquivalents);
+    sequence.setFamilyManager(familyManager);
+    sequence.setSymbolManager(symbolManager);
+
+    List<List<String>> results = sequence.infer(term1, term2, false);
+
+    if (results.isEmpty()) {
+      System.out.println("   No sequences could be generated.");
+    } else {
+      System.out.println("   Generated " + results.size() + " unique sequences:");
       for (List<String> seq : results) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < seq.size(); i++) {
@@ -630,6 +665,8 @@ public Main() {
       } else if (command.equals("p") || command.equals("process")) {
         processNewSequence();
       } else if (command.equals("a") || command.equals("analyze")) {
+        handleAnalyze();
+      } else if (command.equals("g") || command.equals("generate")) {
         handleGeneration();
       } else if (command.equals("v") || command.equals("view")) {
         printDiscoveredKnowledge();

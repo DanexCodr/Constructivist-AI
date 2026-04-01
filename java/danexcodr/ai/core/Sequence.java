@@ -11,6 +11,7 @@ public class Sequence {
   private Map<String, Set<String>> currentStructuralEquivalents;
   private PatternProcessor patternProcessor;
   private PatternFamilyManager familyManager;
+  private SymbolManager symbolManager;
 
   public Sequence(List<Pattern> allPatterns, PatternProcessor patternProcessor) {
     this.allPatterns = allPatterns;
@@ -32,6 +33,10 @@ public class Sequence {
     this.familyManager = familyManager;
   }
 
+  public void setSymbolManager(SymbolManager symbolManager) {
+    this.symbolManager = symbolManager;
+  }
+
   private PatternFamily getFreshFamily(PatternFamily family) {
     if (family == null || currentStructuralEquivalents == null) {
       return family;
@@ -50,6 +55,10 @@ public class Sequence {
   }
 
   public List<List<String>> infer(String T1, String T2) {
+    return infer(T1, T2, true);
+  }
+
+  public List<List<String>> infer(String T1, String T2, boolean normalizeForAnswer) {
     Set<List<String>> shallowResults = new LinkedHashSet<List<String>>();
     boolean foundNonLogicalDirectRelation = false;
 
@@ -59,7 +68,9 @@ public class Sequence {
         PatternFamily family = getFamilyForRelation(directRelation);
 
         if (family != null) {
-            shallowResults.addAll(inferFromFamily(family, T1, T2, directRelation.isCommutative()));
+            shallowResults.addAll(
+                inferFromFamily(
+                    family, T1, T2, directRelation.isCommutative(), null, normalizeForAnswer));
             foundNonLogicalDirectRelation = true;
         }
     }
@@ -70,7 +81,9 @@ public class Sequence {
         PatternFamily family = getFamilyForRelation(reverseRelation);
 
         if (family != null) {
-            shallowResults.addAll(inferFromFamily(family, T2, T1, reverseRelation.isCommutative()));
+            shallowResults.addAll(
+                inferFromFamily(
+                    family, T2, T1, reverseRelation.isCommutative(), null, normalizeForAnswer));
             foundNonLogicalDirectRelation = true;
         }
     }
@@ -81,6 +94,7 @@ public class Sequence {
             new RelationFinder(
                 allPatterns, currentFamilies, currentStructuralEquivalents, patternProcessor);
         relationFinder.validateInferences(T1, T2, results);
+        results = rankByStructuralContext(results);
         return results;
     }
 
@@ -153,7 +167,9 @@ public class Sequence {
                     }
 
                     if (canUseForTransitive && familyToUse != null) {
-                        shallowResults.addAll(inferFromFamily(familyToUse, T1, T2, commutativity));
+                        shallowResults.addAll(
+                            inferFromFamily(
+                                familyToUse, T1, T2, commutativity, null, normalizeForAnswer));
                     }
                 }
             }
@@ -190,7 +206,9 @@ public class Sequence {
                 PatternFamily family = getFamilyForRelation(bridge);
 
                 if (family != null && bridge.isCommutative()) {
-                    shallowResults.addAll(inferFromFamily(family, T1, T2, bridge.isCommutative()));
+                    shallowResults.addAll(
+                        inferFromFamily(
+                            family, T1, T2, bridge.isCommutative(), null, normalizeForAnswer));
                 }
             }
         }
@@ -219,7 +237,14 @@ public class Sequence {
                         PatternFamily family = getFamilyForRelation(relation);
 
                         if (family != null) {
-                            shallowResults.addAll(inferFromFamily(family, T1, T2, relation.isCommutative()));
+                            shallowResults.addAll(
+                                inferFromFamily(
+                                    family,
+                                    T1,
+                                    T2,
+                                    relation.isCommutative(),
+                                    null,
+                                    normalizeForAnswer));
                         }
                     }
                 }
@@ -256,7 +281,14 @@ public class Sequence {
                             }
 
                             if (familyToUse != null) {
-                                shallowResults.addAll(inferFromFamily(familyToUse, T1, T2, commutativity));
+                                shallowResults.addAll(
+                                    inferFromFamily(
+                                        familyToUse,
+                                        T1,
+                                        T2,
+                                        commutativity,
+                                        null,
+                                        normalizeForAnswer));
                             }
                         }
                     }
@@ -267,12 +299,13 @@ public class Sequence {
 
     List<List<String>> finalResults = new ArrayList<List<String>>(shallowResults);
     relationFinder.validateInferences(T1, T2, finalResults);
+    finalResults = rankByStructuralContext(finalResults);
     return finalResults;
 }
 
   public List<List<String>> inferFromFamily(
       PatternFamily family, String T1, String T2, boolean useCommutative) {
-    return inferFromFamily(family, T1, T2, useCommutative, null);
+    return inferFromFamily(family, T1, T2, useCommutative, null, true);
   }
 
   public List<List<String>> inferFromFamily(
@@ -281,6 +314,17 @@ public class Sequence {
     String T2,
     boolean useCommutative,
     Map<String, Set<String>> currentStructuralEquivalents) {
+    return inferFromFamily(
+        family, T1, T2, useCommutative, currentStructuralEquivalents, true);
+  }
+
+  public List<List<String>> inferFromFamily(
+    PatternFamily family,
+    String T1,
+    String T2,
+    boolean useCommutative,
+    Map<String, Set<String>> currentStructuralEquivalents,
+    boolean normalizeForAnswer) {
 
   Set<List<String>> inferredSequences = new LinkedHashSet<List<String>>();
 
@@ -341,7 +385,7 @@ public class Sequence {
         }
       }
       if (!sequence.isEmpty()) {
-        inferredSequences.add(sequence);
+        inferredSequences.add(normalizeForAnswer ? normalizeArticleChoice(sequence) : sequence);
       }
     }
 
@@ -371,11 +415,169 @@ public class Sequence {
           }
         }
         if (!sequence.isEmpty()) {
-          inferredSequences.add(sequence);
+          inferredSequences.add(normalizeForAnswer ? normalizeArticleChoice(sequence) : sequence);
         }
       }
     }
   }
   return new ArrayList<List<String>>(inferredSequences);
 }
+
+  private List<List<String>> rankByStructuralContext(List<List<String>> candidates) {
+    if (symbolManager == null || candidates == null || candidates.size() <= 1) {
+      return candidates;
+    }
+
+    final Map<List<String>, Integer> scores = new HashMap<List<String>, Integer>();
+    final Map<List<String>, String> joined = new HashMap<List<String>, String>();
+    for (List<String> candidate : candidates) {
+      scores.put(candidate, Integer.valueOf(scoreByContext(candidate)));
+      joined.put(candidate, toJoined(candidate));
+    }
+
+    Collections.sort(
+        candidates,
+        new Comparator<List<String>>() {
+          @Override
+          public int compare(List<String> a, List<String> b) {
+            Integer sb = scores.get(b);
+            Integer sa = scores.get(a);
+            int byScore = sb.compareTo(sa);
+            if (byScore != 0) {
+              return byScore;
+            }
+            return joined.get(b).compareTo(joined.get(a));
+          }
+        });
+
+    return candidates;
+  }
+
+  private int scoreByContext(List<String> sequence) {
+    if (symbolManager == null || sequence == null || sequence.size() < 2) {
+      return 0;
+    }
+
+    int score = 0;
+    Map<String, Symbol> symbols = symbolManager.getSymbols();
+    for (int i = 0; i < sequence.size() - 1; i++) {
+      String left = symbolManager.getCanonical(sequence.get(i));
+      String right = symbolManager.getCanonical(sequence.get(i + 1));
+
+      Symbol leftSymbol = symbols.get(left);
+      if (leftSymbol != null) {
+        Integer rightFreq = leftSymbol.rightContext.get(right);
+        if (rightFreq != null) {
+          score += rightFreq.intValue();
+        }
+      }
+
+      Symbol rightSymbol = symbols.get(right);
+      if (rightSymbol != null) {
+        Integer leftFreq = rightSymbol.leftContext.get(left);
+        if (leftFreq != null) {
+          score += leftFreq.intValue();
+        }
+      }
+    }
+    return score;
+  }
+
+  private List<String> normalizeArticleChoice(List<String> sequence) {
+    if (sequence == null || sequence.isEmpty()) {
+      return sequence;
+    }
+
+    List<String> normalized = new ArrayList<String>(sequence);
+    for (int i = 0; i < normalized.size() - 1; i++) {
+      String token = normalized.get(i);
+      if (!"a".equalsIgnoreCase(token) && !"an".equalsIgnoreCase(token)) {
+        continue;
+      }
+
+      String next = normalized.get(i + 1);
+      String preferred = preferredArticleFor(next);
+      if (preferred != null) {
+        normalized.set(i, preferred);
+      }
+    }
+    return normalized;
+  }
+
+  private String preferredArticleFor(String nextToken) {
+    String canonicalNext = canonicalOf(nextToken);
+    Map<String, Symbol> symbols = symbolManager != null ? symbolManager.getSymbols() : null;
+
+    int aCount = 0;
+    int anCount = 0;
+    if (symbols != null) {
+      Symbol nextSymbol = symbols.get(canonicalNext);
+      if (nextSymbol != null) {
+        Integer a = nextSymbol.leftContext.get("a");
+        Integer an = nextSymbol.leftContext.get("an");
+        if (a != null) {
+          aCount = a.intValue();
+        }
+        if (an != null) {
+          anCount = an.intValue();
+        }
+      }
+    }
+
+    if (aCount > anCount) {
+      return "a";
+    }
+    if (anCount > aCount) {
+      return "an";
+    }
+    return startsWithVowelSound(nextToken) ? "an" : "a";
+  }
+
+  private String canonicalOf(String token) {
+    if (symbolManager == null) {
+      return token;
+    }
+    return symbolManager.getCanonical(token);
+  }
+
+  private boolean startsWithVowelSound(String token) {
+    if (token == null || token.isEmpty()) {
+      return false;
+    }
+    String lower = token.toLowerCase(Locale.ROOT);
+
+    if (lower.startsWith("honest")
+        || lower.startsWith("honor")
+        || lower.startsWith("hour")
+        || lower.startsWith("heir")) {
+      return true;
+    }
+
+    if (lower.startsWith("uni")
+        || lower.startsWith("use")
+        || lower.startsWith("user")
+        || lower.startsWith("euro")
+        || lower.startsWith("one")
+        || lower.startsWith("once")) {
+      return false;
+    }
+
+    if (lower.startsWith("yt")) {
+      return true;
+    }
+
+    char ch = lower.charAt(0);
+    return ch == 'a' || ch == 'e' || ch == 'i' || ch == 'o' || ch == 'u';
+  }
+
+  private String toJoined(List<String> sequence) {
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < sequence.size(); i++) {
+      if (i > 0) {
+        sb.append(' ');
+      }
+      sb.append(sequence.get(i));
+    }
+    return sb.toString();
+  }
 }
