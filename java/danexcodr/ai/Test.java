@@ -97,6 +97,69 @@ public class Test {
         return lines.toArray(new String[lines.size()]);
     }
 
+    private static class EchoingInputStream extends InputStream {
+        private final InputStream delegate;
+        private final ByteArrayOutputStream lineBuffer = new ByteArrayOutputStream();
+
+        EchoingInputStream(InputStream delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public int read() throws java.io.IOException {
+            int value = delegate.read();
+            if (value != -1) {
+                processByte(value);
+            } else {
+                flushPendingLine();
+            }
+            return value;
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws java.io.IOException {
+            int count = delegate.read(b, off, len);
+            if (count == -1) {
+                flushPendingLine();
+                return -1;
+            }
+
+            for (int i = off; i < off + count; i++) {
+                processByte(b[i] & 0xFF);
+            }
+            return count;
+        }
+
+        @Override
+        public void close() throws java.io.IOException {
+            flushPendingLine();
+            delegate.close();
+        }
+
+        private void processByte(int value) {
+            if (value == '\r') {
+                return;
+            }
+            if (value == '\n') {
+                emitCurrentLine();
+                return;
+            }
+            lineBuffer.write(value);
+        }
+
+        private void emitCurrentLine() {
+            String line = new String(lineBuffer.toByteArray(), StandardCharsets.UTF_8);
+            System.out.println(line);
+            lineBuffer.reset();
+        }
+
+        private void flushPendingLine() {
+            if (lineBuffer.size() > 0) {
+                emitCurrentLine();
+            }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         System.out.println("--- Starting Constructivist AI Auto-Run ---\n");
 
@@ -120,7 +183,9 @@ public class Test {
                 "UTF-8");
             System.setOut(teeOut);
 
-            System.setIn(new ByteArrayInputStream(inputSequence.getBytes(StandardCharsets.UTF_8)));
+            System.setIn(
+                new EchoingInputStream(
+                    new ByteArrayInputStream(inputSequence.getBytes(StandardCharsets.UTF_8))));
 
             Main.main(args);
 
