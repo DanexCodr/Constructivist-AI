@@ -19,7 +19,6 @@ public class Main {
   private PatternFamilyManager familyManager;
   private OptionalFinder optionalFinder;
   private PatternProcessor patternProcessor;
-  private BigramAnalyzer bigramAnalyzer;
 
   public SymbolManager getSymbolManager() {
     return symbolManager;
