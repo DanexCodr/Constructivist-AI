@@ -48,22 +48,33 @@ public class Main {
       return null;
     }
 
-    Map<String, Set<String>> aliasPositions = new TreeMap<String, Set<String>>();
+    Map<String, Set<String>> aliasPositions = new TreeMap<>();
 
     for (Structure sp : family.getMemberPatterns()) {
       Data data = family.getAliasedSlots(sp);
 
       int idx1 = -1;
       int idx2 = -1;
+      int sharedIdx = -1;
       for (int i = 0; i < data.size(); i++) {
         if (!data.isPlaceholder(i)) continue;
         SlotFlag flag = data.getPlaceholderAt(i);
-        if (idx1 == -1 && (flag == SlotFlag._1 || flag == SlotFlag._C || flag == SlotFlag._X)) {
+        if (idx1 == -1 && flag == SlotFlag._1) {
           idx1 = i;
         }
-        if (idx2 == -1 && (flag == SlotFlag._2 || flag == SlotFlag._C || flag == SlotFlag._X)) {
+        if (idx2 == -1 && flag == SlotFlag._2) {
           idx2 = i;
         }
+        if (sharedIdx == -1 && (flag == SlotFlag._C || flag == SlotFlag._X)) {
+          sharedIdx = i;
+        }
+      }
+
+      if (idx1 == -1) {
+        idx1 = sharedIdx;
+      }
+      if (idx2 == -1) {
+        idx2 = sharedIdx;
       }
 
       if (idx1 == -1 || idx2 == -1) continue;
@@ -73,7 +84,7 @@ public class Main {
         String alias = data.getAliasAt(i);
         Set<String> positions = aliasPositions.get(alias);
         if (positions == null) {
-          positions = new LinkedHashSet<String>();
+          positions = new LinkedHashSet<>();
           aliasPositions.put(alias, positions);
         }
         positions.add(categorizeAliasPosition(i, idx1, idx2));
@@ -88,18 +99,38 @@ public class Main {
     boolean first = true;
     for (Map.Entry<String, Set<String>> e : aliasPositions.entrySet()) {
       if (!first) sb.append("; ");
-      sb.append(e.getKey()).append(" @ ").append(new ArrayList<String>(e.getValue()));
+      sb.append(e.getKey()).append(" @ ").append(e.getValue());
       first = false;
     }
     return sb.toString();
   }
 
   private String categorizeAliasPosition(int aliasIndex, int idx1, int idx2) {
-    if (aliasIndex < idx1 && aliasIndex < idx2) {
-      return "before both [1],[2]";
+    if (idx1 < 0 || idx2 < 0) {
+      return "unknown";
     }
-    if (aliasIndex > idx1 && aliasIndex > idx2) {
-      return "after both [1],[2]";
+
+    if (idx1 == idx2) {
+      if (aliasIndex < idx1) {
+        return "before shared slot";
+      }
+      if (aliasIndex > idx1) {
+        return "after shared slot";
+      }
+      return "at shared slot";
+    }
+
+    int low = Math.min(idx1, idx2);
+    int high = Math.max(idx1, idx2);
+
+    if (aliasIndex < low) {
+      return "before both [1], [2]";
+    }
+    if (aliasIndex > high) {
+      return "after both [1], [2]";
+    }
+    if (aliasIndex == idx1 || aliasIndex == idx2) {
+      return "at placeholder position";
     }
     if (idx1 < aliasIndex && aliasIndex < idx2) {
       return "between [1]->[2]";
