@@ -121,12 +121,6 @@ public class Test {
             System.setOut(teeOut);
 
             System.setIn(new ByteArrayInputStream(inputSequence.getBytes(StandardCharsets.UTF_8)));
-            for (String line : INPUT_LINES) {
-                if (line.isEmpty()) {
-                    continue;
-                }
-                System.out.println(line);
-            }
 
             Main.main(args);
 
