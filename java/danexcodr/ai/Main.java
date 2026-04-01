@@ -30,6 +30,86 @@ public class Main {
         .format(new java.util.Date(timestamp));
   }
 
+  private String summarizeConditionalContext(PatternFamily family) {
+    boolean hasConditionalMarker = false;
+    for (Set<String> tokenSet : family.getAliases().values()) {
+      for (String token : tokenSet) {
+        if ("if".equals(token) || "then".equals(token)) {
+          hasConditionalMarker = true;
+          break;
+        }
+      }
+      if (hasConditionalMarker) {
+        break;
+      }
+    }
+
+    if (!hasConditionalMarker) {
+      return null;
+    }
+
+    Map<String, Set<String>> aliasPositions = new TreeMap<String, Set<String>>();
+
+    for (Structure sp : family.getMemberPatterns()) {
+      Data data = family.getAliasedSlots(sp);
+
+      int idx1 = -1;
+      int idx2 = -1;
+      for (int i = 0; i < data.size(); i++) {
+        if (!data.isPlaceholder(i)) continue;
+        SlotFlag flag = data.getPlaceholderAt(i);
+        if (idx1 == -1 && (flag == SlotFlag._1 || flag == SlotFlag._C || flag == SlotFlag._X)) {
+          idx1 = i;
+        }
+        if (idx2 == -1 && (flag == SlotFlag._2 || flag == SlotFlag._C || flag == SlotFlag._X)) {
+          idx2 = i;
+        }
+      }
+
+      if (idx1 == -1 || idx2 == -1) continue;
+
+      for (int i = 0; i < data.size(); i++) {
+        if (!data.isAlias(i)) continue;
+        String alias = data.getAliasAt(i);
+        Set<String> positions = aliasPositions.get(alias);
+        if (positions == null) {
+          positions = new LinkedHashSet<String>();
+          aliasPositions.put(alias, positions);
+        }
+        positions.add(categorizeAliasPosition(i, idx1, idx2));
+      }
+    }
+
+    if (aliasPositions.isEmpty()) {
+      return null;
+    }
+
+    StringBuilder sb = new StringBuilder();
+    boolean first = true;
+    for (Map.Entry<String, Set<String>> e : aliasPositions.entrySet()) {
+      if (!first) sb.append("; ");
+      sb.append(e.getKey()).append(" @ ").append(new ArrayList<String>(e.getValue()));
+      first = false;
+    }
+    return sb.toString();
+  }
+
+  private String categorizeAliasPosition(int aliasIndex, int idx1, int idx2) {
+    if (aliasIndex < idx1 && aliasIndex < idx2) {
+      return "before both [1],[2]";
+    }
+    if (aliasIndex > idx1 && aliasIndex > idx2) {
+      return "after both [1],[2]";
+    }
+    if (idx1 < aliasIndex && aliasIndex < idx2) {
+      return "between [1]->[2]";
+    }
+    if (idx2 < aliasIndex && aliasIndex < idx1) {
+      return "between [2]->[1]";
+    }
+    return "adjacent";
+  }
+
   public void printDiscoveredKnowledge() {
     System.out.println("\n=== Discovered Symbols (" + symbolManager.getSymbols().size() + ") ===");
 
@@ -245,6 +325,11 @@ public class Main {
             }
           }
           System.out.println(sb.toString());
+        }
+
+        String contextualPositions = summarizeConditionalContext(family);
+        if (contextualPositions != null) {
+          System.out.println("     Context: " + contextualPositions);
         }
 
         System.out.println(
