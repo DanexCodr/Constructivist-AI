@@ -137,3 +137,53 @@ javac -d bin $(find java -name "*.java" | tr '\n' ' ')
 ## Conclusion
 
 Comprehensive testing using **`Main` directly (not `Test`)** is successful and reveals that command-path behavior, validation, and introspection are functioning, while generation grammar quality (article selection) still shows observable issues in output quality.
+
+---
+
+## Scenario 4: Comprehensive learning stress test (broader concept coverage)
+
+### Input focus
+- Learning-only stress set (41 training lines) spanning:
+  - taxonomy (`cat/dog/wolf/lion` with `feline/canine/mammal/animal`)
+  - commutative links (`X and Y`)
+  - synonym-like symmetry (`red equals crimson`, `blue equals azure`)
+  - conditional forms (`if hungry eat`, `if hungry then eat`, `if tired sleep`, `sleep if tired`)
+  - arithmetic templates (`1 + 2 = 3`, `5 + 5 = 10`, reverse form)
+- Then `v` and `q` to inspect learned state.
+
+### Key observed output
+- Learning discovered significantly larger structure:
+  - `Discovered 18 Concepts.`
+- Introspection counts:
+  - `=== Discovered Symbols (32) ===`
+  - `=== All Patterns (18) ===`
+  - `=== Pattern Families (6) ===`
+- Structural equivalents remained consistent and persistent:
+  - `'a' ~ [an]`
+  - `'an' ~ [a]`
+- Learned structural tokens expanded to include domain-specific connectors:
+  - `[3, =, a, an, and, equals, is, not, then]`
+- Learned dual tokens included inferred alternatives from conditional/arithmetic sets:
+  - `[+, 10, if, tired]`
+
+### Representative learned relations
+- Commutative relation families:
+  - `canine <-> feline`
+  - `canine <-> wolf`
+  - `feline <-> lion`
+  - `crimson <-> red`
+  - `azure <-> blue`
+- Directed relation families:
+  - `cat -> feline`
+  - `dog -> canine`
+  - `wolf -> canine`
+  - `lion -> feline`
+  - `canine -> mammal`
+  - `feline -> mammal`
+  - `mammal -> animal`
+  - `bird -> animal`
+- Conditional concept behavior showed generalized structure across two condition/outcome pairs.
+
+### Result
+- Learning scales to a broader mixed corpus and yields richer pattern-family organization without runtime errors.
+- Cross-domain structural-equivalent detection (`a`/`an`) remains active in larger runs.
