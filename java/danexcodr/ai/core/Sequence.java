@@ -55,6 +55,10 @@ public class Sequence {
   }
 
   public List<List<String>> infer(String T1, String T2) {
+    return infer(T1, T2, true);
+  }
+
+  public List<List<String>> infer(String T1, String T2, boolean normalizeForAnswer) {
     Set<List<String>> shallowResults = new LinkedHashSet<List<String>>();
     boolean foundNonLogicalDirectRelation = false;
 
@@ -64,7 +68,9 @@ public class Sequence {
         PatternFamily family = getFamilyForRelation(directRelation);
 
         if (family != null) {
-            shallowResults.addAll(inferFromFamily(family, T1, T2, directRelation.isCommutative()));
+            shallowResults.addAll(
+                inferFromFamily(
+                    family, T1, T2, directRelation.isCommutative(), null, normalizeForAnswer));
             foundNonLogicalDirectRelation = true;
         }
     }
@@ -75,7 +81,9 @@ public class Sequence {
         PatternFamily family = getFamilyForRelation(reverseRelation);
 
         if (family != null) {
-            shallowResults.addAll(inferFromFamily(family, T2, T1, reverseRelation.isCommutative()));
+            shallowResults.addAll(
+                inferFromFamily(
+                    family, T2, T1, reverseRelation.isCommutative(), null, normalizeForAnswer));
             foundNonLogicalDirectRelation = true;
         }
     }
@@ -159,7 +167,9 @@ public class Sequence {
                     }
 
                     if (canUseForTransitive && familyToUse != null) {
-                        shallowResults.addAll(inferFromFamily(familyToUse, T1, T2, commutativity));
+                        shallowResults.addAll(
+                            inferFromFamily(
+                                familyToUse, T1, T2, commutativity, null, normalizeForAnswer));
                     }
                 }
             }
@@ -196,7 +206,9 @@ public class Sequence {
                 PatternFamily family = getFamilyForRelation(bridge);
 
                 if (family != null && bridge.isCommutative()) {
-                    shallowResults.addAll(inferFromFamily(family, T1, T2, bridge.isCommutative()));
+                    shallowResults.addAll(
+                        inferFromFamily(
+                            family, T1, T2, bridge.isCommutative(), null, normalizeForAnswer));
                 }
             }
         }
@@ -225,7 +237,14 @@ public class Sequence {
                         PatternFamily family = getFamilyForRelation(relation);
 
                         if (family != null) {
-                            shallowResults.addAll(inferFromFamily(family, T1, T2, relation.isCommutative()));
+                            shallowResults.addAll(
+                                inferFromFamily(
+                                    family,
+                                    T1,
+                                    T2,
+                                    relation.isCommutative(),
+                                    null,
+                                    normalizeForAnswer));
                         }
                     }
                 }
@@ -262,7 +281,14 @@ public class Sequence {
                             }
 
                             if (familyToUse != null) {
-                                shallowResults.addAll(inferFromFamily(familyToUse, T1, T2, commutativity));
+                                shallowResults.addAll(
+                                    inferFromFamily(
+                                        familyToUse,
+                                        T1,
+                                        T2,
+                                        commutativity,
+                                        null,
+                                        normalizeForAnswer));
                             }
                         }
                     }
@@ -279,7 +305,7 @@ public class Sequence {
 
   public List<List<String>> inferFromFamily(
       PatternFamily family, String T1, String T2, boolean useCommutative) {
-    return inferFromFamily(family, T1, T2, useCommutative, null);
+    return inferFromFamily(family, T1, T2, useCommutative, null, true);
   }
 
   public List<List<String>> inferFromFamily(
@@ -288,6 +314,17 @@ public class Sequence {
     String T2,
     boolean useCommutative,
     Map<String, Set<String>> currentStructuralEquivalents) {
+    return inferFromFamily(
+        family, T1, T2, useCommutative, currentStructuralEquivalents, true);
+  }
+
+  public List<List<String>> inferFromFamily(
+    PatternFamily family,
+    String T1,
+    String T2,
+    boolean useCommutative,
+    Map<String, Set<String>> currentStructuralEquivalents,
+    boolean normalizeForAnswer) {
 
   Set<List<String>> inferredSequences = new LinkedHashSet<List<String>>();
 
@@ -348,7 +385,7 @@ public class Sequence {
         }
       }
       if (!sequence.isEmpty()) {
-        inferredSequences.add(normalizeArticleChoice(sequence));
+        inferredSequences.add(normalizeForAnswer ? normalizeArticleChoice(sequence) : sequence);
       }
     }
 
@@ -378,7 +415,7 @@ public class Sequence {
           }
         }
         if (!sequence.isEmpty()) {
-          inferredSequences.add(normalizeArticleChoice(sequence));
+          inferredSequences.add(normalizeForAnswer ? normalizeArticleChoice(sequence) : sequence);
         }
       }
     }
