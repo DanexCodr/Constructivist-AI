@@ -385,7 +385,7 @@ public class Sequence {
         }
       }
       if (!sequence.isEmpty()) {
-        inferredSequences.add(normalizeForAnswer ? normalizeArticleChoice(sequence) : sequence);
+        inferredSequences.add(normalizeForAnswer ? normalizeStructuralEquivalentChoice(sequence) : sequence);
       }
     }
 
@@ -415,7 +415,7 @@ public class Sequence {
           }
         }
         if (!sequence.isEmpty()) {
-          inferredSequences.add(normalizeForAnswer ? normalizeArticleChoice(sequence) : sequence);
+          inferredSequences.add(normalizeForAnswer ? normalizeStructuralEquivalentChoice(sequence) : sequence);
         }
       }
     }
@@ -483,20 +483,14 @@ public class Sequence {
     return score;
   }
 
-  private List<String> normalizeArticleChoice(List<String> sequence) {
+  private List<String> normalizeStructuralEquivalentChoice(List<String> sequence) {
     if (sequence == null || sequence.isEmpty()) {
       return sequence;
     }
 
     List<String> normalized = new ArrayList<String>(sequence);
-    for (int i = 0; i < normalized.size() - 1; i++) {
-      String token = normalized.get(i);
-      if (!"a".equalsIgnoreCase(token) && !"an".equalsIgnoreCase(token)) {
-        continue;
-      }
-
-      String next = normalized.get(i + 1);
-      String preferred = preferredArticleFor(next);
+    for (int i = 0; i < normalized.size(); i++) {
+      String preferred = preferredEquivalentForPosition(normalized, i);
       if (preferred != null) {
         normalized.set(i, preferred);
       }
@@ -504,33 +498,111 @@ public class Sequence {
     return normalized;
   }
 
-  private String preferredArticleFor(String nextToken) {
-    String canonicalNext = canonicalOf(nextToken);
-    Map<String, Symbol> symbols = symbolManager != null ? symbolManager.getSymbols() : null;
+  private String preferredEquivalentForPosition(List<String> sequence, int index) {
+    if (sequence == null || index < 0 || index >= sequence.size()) {
+      return null;
+    }
+    String token = sequence.get(index);
+    Set<String> candidates = equivalentCandidates(token);
+    if (candidates.size() <= 1) {
+      return null;
+    }
 
-    int aCount = 0;
-    int anCount = 0;
-    if (symbols != null) {
-      Symbol nextSymbol = symbols.get(canonicalNext);
-      if (nextSymbol != null) {
-        Integer a = nextSymbol.leftContext.get("a");
-        Integer an = nextSymbol.leftContext.get("an");
-        if (a != null) {
-          aCount = a.intValue();
+    String leftNeighbor = index > 0 ? sequence.get(index - 1) : null;
+    String rightNeighbor = index < sequence.size() - 1 ? sequence.get(index + 1) : null;
+
+    String best = token;
+    int bestScore = Integer.MIN_VALUE;
+    for (String candidate : candidates) {
+      int score = scoreCandidateInContext(candidate, leftNeighbor, rightNeighbor);
+      if (score > bestScore) {
+        bestScore = score;
+        best = candidate;
+      }
+    }
+
+    if (bestScore <= 0 || token.equals(best)) {
+      return null;
+    }
+    return best;
+  }
+
+  private Set<String> equivalentCandidates(String token) {
+    LinkedHashSet<String> candidates = new LinkedHashSet<String>();
+    if (token == null) {
+      return candidates;
+    }
+
+    candidates.add(token);
+    if (currentStructuralEquivalents == null || currentStructuralEquivalents.isEmpty()) {
+      return candidates;
+    }
+
+    Set<String> direct = currentStructuralEquivalents.get(token);
+    if (direct != null) {
+      candidates.addAll(direct);
+    }
+
+    String canonical = canonicalOf(token);
+    if (canonical != null) {
+      candidates.add(canonical);
+      Set<String> canonicalSet = currentStructuralEquivalents.get(canonical);
+      if (canonicalSet != null) {
+        candidates.addAll(canonicalSet);
+      }
+    }
+    return candidates;
+  }
+
+  private int scoreCandidateInContext(String candidate, String leftNeighbor, String rightNeighbor) {
+    if (symbolManager == null || candidate == null) {
+      return 0;
+    }
+
+    Map<String, Symbol> symbols = symbolManager.getSymbols();
+    if (symbols == null || symbols.isEmpty()) {
+      return 0;
+    }
+
+    String canonicalCandidate = canonicalOf(candidate);
+    Symbol candidateSymbol = symbols.get(canonicalCandidate);
+    int score = 0;
+
+    if (leftNeighbor != null) {
+      String canonicalLeft = canonicalOf(leftNeighbor);
+      Symbol leftSymbol = symbols.get(canonicalLeft);
+      if (leftSymbol != null) {
+        Integer freq = leftSymbol.rightContext.get(canonicalCandidate);
+        if (freq != null) {
+          score += freq.intValue();
         }
-        if (an != null) {
-          anCount = an.intValue();
+      }
+      if (candidateSymbol != null) {
+        Integer freq = candidateSymbol.leftContext.get(canonicalLeft);
+        if (freq != null) {
+          score += freq.intValue();
         }
       }
     }
 
-    if (aCount > anCount) {
-      return "a";
+    if (rightNeighbor != null) {
+      String canonicalRight = canonicalOf(rightNeighbor);
+      Symbol rightSymbol = symbols.get(canonicalRight);
+      if (candidateSymbol != null) {
+        Integer freq = candidateSymbol.rightContext.get(canonicalRight);
+        if (freq != null) {
+          score += freq.intValue();
+        }
+      }
+      if (rightSymbol != null) {
+        Integer freq = rightSymbol.leftContext.get(canonicalCandidate);
+        if (freq != null) {
+          score += freq.intValue();
+        }
+      }
     }
-    if (anCount > aCount) {
-      return "an";
-    }
-    return startsWithVowelSound(nextToken) ? "an" : "a";
+
+    return score;
   }
 
   private String canonicalOf(String token) {
@@ -538,36 +610,6 @@ public class Sequence {
       return token;
     }
     return symbolManager.getCanonical(token);
-  }
-
-  private boolean startsWithVowelSound(String token) {
-    if (token == null || token.isEmpty()) {
-      return false;
-    }
-    String lower = token.toLowerCase(Locale.ROOT);
-
-    if (lower.startsWith("honest")
-        || lower.startsWith("honor")
-        || lower.startsWith("hour")
-        || lower.startsWith("heir")) {
-      return true;
-    }
-
-    if (lower.startsWith("uni")
-        || lower.startsWith("use")
-        || lower.startsWith("user")
-        || lower.startsWith("euro")
-        || lower.startsWith("one")
-        || lower.startsWith("once")) {
-      return false;
-    }
-
-    if (lower.startsWith("yt")) {
-      return true;
-    }
-
-    char ch = lower.charAt(0);
-    return ch == 'a' || ch == 'e' || ch == 'i' || ch == 'o' || ch == 'u';
   }
 
   private String toJoined(List<String> sequence) {
