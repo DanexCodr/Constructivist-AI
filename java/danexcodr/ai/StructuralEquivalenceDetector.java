@@ -288,7 +288,7 @@ public class StructuralEquivalenceDetector {
   }
 
   public boolean reevaluateEquivalents(Map<String, Set<String>> structuralEquivalents) {
-    Set<EquivalencePair> pairsToRemove = new HashSet<EquivalencePair>();
+    Set<EquivalencePair> pairsToRemove = new HashSet<>();
     for (Entry<String, Set<String>> entry : structuralEquivalents.entrySet()) {
       for (String w2 : entry.getValue()) {
         if (areNeighbors(entry.getKey(), w2))

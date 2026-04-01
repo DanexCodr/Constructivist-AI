@@ -24,7 +24,7 @@ public class SequenceCollapser {
     List<PatternFamily> families =
         patternFamilyManager.get(structuralEquivalents, patternFamilyBuilder);
     if (families.isEmpty()) return null;
-    List<List<String>> collapsedList = new ArrayList<List<String>>();
+    List<List<String>> collapsedList = new ArrayList<>();
     boolean anyChange = false;
     for (List<String> sequence : sequences) {
       List<String> collapsed = collapseSequence(sequence, families, protectedTokens);
@@ -38,7 +38,7 @@ public class SequenceCollapser {
     List<PatternFamily> families =
         patternFamilyManager.get(structuralEquivalents, patternFamilyBuilder);
     if (families.isEmpty()) return false;
-    List<String> collapsed = collapseSequence(sequence, families, new HashSet<String>());
+    List<String> collapsed = collapseSequence(sequence, families, new HashSet<>());
     if (collapsed.size() == sequence.size()) return false;
     for (String token : collapsed) {
       if (token.startsWith("PF")) {
@@ -54,7 +54,7 @@ public class SequenceCollapser {
 
   private List<String> collapseSequence(
       List<String> sequence, List<PatternFamily> families, Set<String> protectedTokens) {
-    List<String> currentSequence = new ArrayList<String>(sequence);
+    List<String> currentSequence = new ArrayList<>(sequence);
     boolean changeOccurred = true;
     while (changeOccurred) {
       changeOccurred = false;
@@ -76,8 +76,7 @@ public class SequenceCollapser {
         }
       }
       if (bestMatchStart != -1) {
-        List<String> nextSequence =
-            new ArrayList<String>(currentSequence.subList(0, bestMatchStart));
+        List<String> nextSequence = new ArrayList<>(currentSequence.subList(0, bestMatchStart));
         nextSequence.add(bestFamilyId);
         nextSequence.addAll(
             currentSequence.subList(bestMatchStart + bestMatchLength, currentSequence.size()));

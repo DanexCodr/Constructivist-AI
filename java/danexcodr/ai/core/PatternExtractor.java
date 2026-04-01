@@ -11,13 +11,13 @@ public class PatternExtractor {
       return true;
     }
 
-    Set<Data> patterns = new HashSet<Data>();
+    Set<Data> patterns = new HashSet<>();
     for (List<String> sequence : equivalentSequences) {
       Data abstractPattern = SequenceTransformer.abstractSequencePF(sequence, term1, term2);
       patterns.add(abstractPattern);
     }
 
-    Set<Data> flippedPatterns = new HashSet<Data>();
+    Set<Data> flippedPatterns = new HashSet<>();
     for (Data pattern : patterns) {
       Data flipped = SequenceTransformer.flipTermPattern(pattern);
       flippedPatterns.add(flipped);
@@ -37,7 +37,7 @@ public class PatternExtractor {
 
     boolean isCommutative = isCommutative(equivalentSequences, actualT1, actualT2);
 
-    Map<Data, Integer> patternCounts = new HashMap<Data, Integer>();
+    Map<Data, Integer> patternCounts = new HashMap<>();
     for (List<String> sequence : equivalentSequences) {
       Data abstractPattern = SequenceTransformer.abstractSequencePF(sequence, actualT1, actualT2);
       patternCounts.put(
@@ -45,10 +45,10 @@ public class PatternExtractor {
           patternCounts.get(abstractPattern) == null ? 1 : patternCounts.get(abstractPattern) + 1);
     }
 
-    List<Structure> tempPatterns = new ArrayList<Structure>();
+    List<Structure> tempPatterns = new ArrayList<>();
 
-    for (Map.Entry<Data, Integer> entry : patternCounts.entrySet()) {
-      Data pattern = entry.getKey();
+    for (Map.Entry<Data, Integer> patternEntry : patternCounts.entrySet()) {
+      Data pattern = patternEntry.getKey();
 
       Data finalData = PatternSlotFiller.finalize(pattern, actualT1, actualT2, isCommutative);
       Structure newPattern = new Structure("TEMP");
