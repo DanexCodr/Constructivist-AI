@@ -1,0 +1,35 @@
+name: Build
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Compile sources
+        run: |
+          mkdir -p bin
+          find java -name "*.java" -print0 | xargs -0 javac -d bin
+
+      - name: Package constructivist_source.jar (source only)
+        run: jar cf constructivist_source.jar -C . java
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: constructivist_source
+          path: constructivist_source.jar
