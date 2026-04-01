@@ -861,19 +861,6 @@ public class PatternProcessor {
   for (Map.Entry<Data, Integer> entry : patternCounts.entrySet()) {
     Data pattern = entry.getKey();
     
-    if (!isCommutative) {
-      int firstPlaceholder = -1;
-      for (int i = 0; i < pattern.size(); i++) {
-        if (pattern.isPlaceholder(i)) {
-          if (firstPlaceholder == -1) firstPlaceholder = i;
-        }
-      }
-      
-      if (firstPlaceholder != -1 && pattern.getPlaceholderAt(firstPlaceholder) == SlotFlag._2) {
-        pattern = SequenceTransformer.flipTermPattern(pattern);
-      }
-    }
-    
     Data finalData = PatternSlotFiller.finalize(pattern, actualT1, actualT2, isCommutative);
     Structure newPattern = new Structure("TEMP");
     Data newData = newPattern.getData();
