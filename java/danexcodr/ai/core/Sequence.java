@@ -392,8 +392,10 @@ public class Sequence {
     }
 
     final Map<List<String>, Integer> scores = new HashMap<List<String>, Integer>();
+    final Map<List<String>, String> joined = new HashMap<List<String>, String>();
     for (List<String> candidate : candidates) {
       scores.put(candidate, Integer.valueOf(scoreByContext(candidate)));
+      joined.put(candidate, toJoined(candidate));
     }
 
     Collections.sort(
@@ -407,7 +409,7 @@ public class Sequence {
             if (byScore != 0) {
               return byScore;
             }
-            return toJoined(b).compareTo(toJoined(a));
+            return joined.get(b).compareTo(joined.get(a));
           }
         });
 
@@ -505,7 +507,29 @@ public class Sequence {
     if (token == null || token.isEmpty()) {
       return false;
     }
-    char ch = Character.toLowerCase(token.charAt(0));
+    String lower = token.toLowerCase(Locale.ROOT);
+
+    if (lower.startsWith("honest")
+        || lower.startsWith("honor")
+        || lower.startsWith("hour")
+        || lower.startsWith("heir")) {
+      return true;
+    }
+
+    if (lower.startsWith("uni")
+        || lower.startsWith("use")
+        || lower.startsWith("user")
+        || lower.startsWith("euro")
+        || lower.startsWith("one")
+        || lower.startsWith("once")) {
+      return false;
+    }
+
+    if (lower.startsWith("yt")) {
+      return true;
+    }
+
+    char ch = lower.charAt(0);
     return ch == 'a' || ch == 'e' || ch == 'i' || ch == 'o' || ch == 'u';
   }
 
