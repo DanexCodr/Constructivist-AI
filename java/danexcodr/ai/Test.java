@@ -118,23 +118,16 @@ public class Test {
 
         @Override
         public int read(byte[] b, int off, int len) throws java.io.IOException {
-            if (b == null) {
-                throw new NullPointerException("byte array must not be null");
-            }
-            if (off < 0 || len < 0 || len > b.length - off) {
-                throw new IndexOutOfBoundsException(
-                    "Invalid offset/length: off=" + off + ", len=" + len + ", arrayLength=" + b.length);
-            }
-            if (len == 0) {
-                return 0;
-            }
-
-            int first = read();
-            if (first == -1) {
+            int count = delegate.read(b, off, len);
+            if (count == -1) {
+                flushPendingLine();
                 return -1;
             }
-            b[off] = (byte) first;
-            return 1;
+
+            for (int i = off; i < off + count; i++) {
+                processByte(b[i] & 0xFF);
+            }
+            return count;
         }
 
         @Override
@@ -166,7 +159,7 @@ public class Test {
             }
         }
     }
-    
+
     public static void main(String[] args) throws Exception {
         System.out.println("--- Starting Constructivist AI Auto-Run ---\n");
 
