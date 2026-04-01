@@ -1,54 +1,30 @@
 package danexcodr.ai.core;
 
 import static danexcodr.ai.Config.*;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
+import java.util.*;
 
 public class ContentFinder {
 
-  private static final double MOVEMENT_WEIGHT = 0.50;
-  private static final double CONTEXT_WEIGHT = 0.30;
-  private static final double ENTROPY_WEIGHT = 0.20;
-  private static final double MIN_ADAPTIVE_THRESHOLD = 0.25;
-
   private OptionalFinder optionalFinder;
-  private BigramAnalyzer bigramAnalyzer;
- 
-  
-  // FIX: Cache the threshold so we don't re-learn or drift within the same batch
-  private Double cachedThreshold = null; 
+  private GramAnalyzer gramAnalyzer;
 
-  public ContentFinder(OptionalFinder optionalFinder, BigramAnalyzer bigramAnalyzer) {
+  public ContentFinder(OptionalFinder optionalFinder, GramAnalyzer gramAnalyzer) {
     this.optionalFinder = optionalFinder;
-    this.bigramAnalyzer = bigramAnalyzer;
+    this.gramAnalyzer = gramAnalyzer;
   }
 
   private static class Score implements Comparable<Score> {
     String token;
-    double score;
     double movementScore;
-    double contextScore;
-    double entropyScore;
 
-    Score(String token, double movementScore, double contextScore, double entropyScore, double score) {
+    Score(String token, double score) {
       this.token = token;
-      this.score = score;
-      this.movementScore = movementScore;
-      this.contextScore = contextScore;
-      this.entropyScore = entropyScore;
+      this.movementScore = score;
     }
 
     @Override
     public int compareTo(Score other) {
-      int scoreCompare = Double.compare(other.score, this.score);
+      int scoreCompare = Double.compare(other.movementScore, this.movementScore);
       if (scoreCompare != 0) {
         return scoreCompare;
       }
@@ -58,7 +34,7 @@ public class ContentFinder {
     @Override
     public int hashCode() {
       int result = 17;
-      long temp = Double.doubleToLongBits(score);
+      long temp = Double.doubleToLongBits(movementScore);
       result = 31 * result + (int) (temp ^ (temp >>> 32));
       result = 31 * result + (token != null ? token.hashCode() : 0);
       return result;
@@ -71,7 +47,7 @@ public class ContentFinder {
 
       Score that = (Score) obj;
 
-      if (Double.compare(that.score, this.score) != 0) return false;
+      if (Double.compare(that.movementScore, this.movementScore) != 0) return false;
       if (this.token == null) {
         return that.token == null;
       } else {
@@ -80,16 +56,13 @@ public class ContentFinder {
     }
   }
 
-  public Set<String> identifyContentWords(List<List<String>> sequences, Set<String> learnedStructurals) {
+  public Set<String> identifyContent(List<List<String>> sequences, Set<String> learnedStructurals) {
 
     if (sequences == null || sequences.isEmpty()) {
         return new HashSet<String>();
     }
 
     Map<String, Set<Integer>> positions = new HashMap<String, Set<Integer>>();
-    Map<String, Map<Integer, Integer>> positionCounts = new HashMap<String, Map<Integer, Integer>>();
-    Map<String, Set<String>> leftContexts = new HashMap<String, Set<String>>();
-    Map<String, Set<String>> rightContexts = new HashMap<String, Set<String>>();
     Set<String> all = new HashSet<String>();
 
     for (List<String> sequence : sequences) {
@@ -100,35 +73,15 @@ public class ContentFinder {
                 positions.put(token, new HashSet<Integer>());
             }
             positions.get(token).add(i);
-
-            if (!positionCounts.containsKey(token)) {
-                positionCounts.put(token, new HashMap<Integer, Integer>());
-            }
-            Map<Integer, Integer> counts = positionCounts.get(token);
-            Integer current = counts.get(i);
-            counts.put(i, (current == null) ? 1 : current + 1);
-
-            if (i > 0) {
-                if (!leftContexts.containsKey(token)) {
-                    leftContexts.put(token, new HashSet<String>());
-                }
-                leftContexts.get(token).add(sequence.get(i - 1));
-            }
-            if (i < sequence.size() - 1) {
-                if (!rightContexts.containsKey(token)) {
-                    rightContexts.put(token, new HashSet<String>());
-                }
-                rightContexts.get(token).add(sequence.get(i + 1));
-            }
         }
     }
 
     Set<String> structuralNeighborsOfOptionals = new HashSet<String>();
-    if (!optionalFinder.getOptionals().isEmpty()) {
+    if (!optionalFinder.get().isEmpty()) {
         for (List<String> sequence : sequences) {
             for (int i = 0; i < sequence.size(); i++) {
                 String token = sequence.get(i);
-                if (optionalFinder.getOptionals().contains(token)) {
+                if (optionalFinder.get().contains(token)) {
                     if (i > 0) {
                         structuralNeighborsOfOptionals.add(sequence.get(i - 1));
                     }
@@ -139,72 +92,48 @@ public class ContentFinder {
             }
         }
     }
-    all.removeAll(optionalFinder.getOptionals());
+    all.removeAll(optionalFinder.get());
 
     if (all.isEmpty()) {
         return new HashSet<String>();
     }
 
-    Set<String> bigramContentWords = bigramAnalyzer.runBigramAnalysis(sequences, all);
-    if (!bigramContentWords.isEmpty()) {
-        return bigramContentWords;
+    Set<String> gramContentTokens = gramAnalyzer.analyze(sequences, all);
+    if (!gramContentTokens.isEmpty()) {
+        return gramContentTokens;
     }
 
-    Set<String> swapStructuralWords = detectSwapStructuralWords(positions, all, sequences);
+    Set<String> swapStructuralTokens = detectStructuralSwap(positions, all, sequences);
 
     double maxMovementCount = 1.0;
-    double maxContextDiversity = 1.0;
     for (String token : all) {
         Set<Integer> poss = positions.get(token);
         int movementCount = (poss != null) ? poss.size() : 0;
         if (movementCount > maxMovementCount) {
             maxMovementCount = movementCount;
         }
-
-        Set<String> left = leftContexts.get(token);
-        Set<String> right = rightContexts.get(token);
-        int contextDiversity = ((left != null) ? left.size() : 0) + ((right != null) ? right.size() : 0);
-        if (contextDiversity > maxContextDiversity) {
-            maxContextDiversity = contextDiversity;
-        }
     }
 
-    final List<Score> scores = new ArrayList<Score>();
+    final List<Score> Scores = new ArrayList<Score>();
     for (String token : all) {
         Set<Integer> poss = positions.get(token);
         int movementCount = (poss != null) ? poss.size() : 0;
-        double movementNorm = (maxMovementCount > 0) ? (movementCount / maxMovementCount) : 0.0;
+        double score = (maxMovementCount > 0) ? (movementCount / maxMovementCount) : 0.0;
 
-        Set<String> left = leftContexts.get(token);
-        Set<String> right = rightContexts.get(token);
-        int contextDiversity = ((left != null) ? left.size() : 0) + ((right != null) ? right.size() : 0);
-        double contextNorm = (maxContextDiversity > 0) ? (contextDiversity / maxContextDiversity) : 0.0;
-
-        double entropyNorm = normalizedPositionEntropy(positionCounts.get(token));
-
-        double score = (MOVEMENT_WEIGHT * movementNorm) + (CONTEXT_WEIGHT * contextNorm) + (ENTROPY_WEIGHT * entropyNorm);
-
-        if (learnedStructurals != null && learnedStructurals.contains(token)) {
-            score *= 0.5;
-        }
-
-        if (swapStructuralWords.contains(token)) {
+        if (swapStructuralTokens.contains(token)) {
             score *= 0.1;
         } else if (structuralNeighborsOfOptionals.contains(token) && movementCount <= 1) {
             score *= 0.1;
         }
 
-        scores.add(new Score(token, movementNorm, contextNorm, entropyNorm, score));
+        Scores.add(new Score(token, score));
     }
 
-    Collections.sort(scores);
-    double adaptiveThreshold = computeAdaptiveThreshold(scores);
+    Collections.sort(Scores);
         
-    // ========================================
-
     Set<String> contents = new LinkedHashSet<String>();
-    for (Score ws : scores) {
-        if (ws.score >= adaptiveThreshold) {
+    for (Score ws : Scores) {
+        if (ws.movementScore >= MAX_SENSITIVITY) {
             contents.add(ws.token);
         } else {
             break;
@@ -218,9 +147,9 @@ public class ContentFinder {
             public int compare(String w1, String w2) {
                 double score1 = 0.0;
                 double score2 = 0.0;
-                for (Score ws : scores) {
-                    if (ws.token.equals(w1)) score1 = ws.score;
-                    if (ws.token.equals(w2)) score2 = ws.score;
+                for (Score ws : Scores) {
+                    if (ws.token.equals(w1)) score1 = ws.movementScore;
+                    if (ws.token.equals(w2)) score2 = ws.movementScore;
                 }
                 return Double.compare(score2, score1);
             }
@@ -234,126 +163,179 @@ public class ContentFinder {
     }
 
     return contents;
-}
+  }
 
-/**
- * Computes normalized entropy of a token's positional distribution across sequences.
- * A score near 0.0 means the token is position-stable; a score near 1.0 means it is
- * distributed more evenly across multiple positions.
- *
- * @param countsByPosition map of index -> observed frequency for a token
- * @return normalized entropy in the range [0.0, 1.0]
- */
-private double normalizedPositionEntropy(Map<Integer, Integer> countsByPosition) {
-    if (countsByPosition == null || countsByPosition.size() <= 1) {
-        return 0.0;
-    }
+  /**
+   * Only detect obvious swap structural tokens. Tokens that DON'T move while other
+   * tokens swap around them.
+   */
+  private Set<String> detectStructuralSwap(
+      Map<String, Set<Integer>> positions, Set<String> all, List<List<String>> sequences) {
+    Set<String> structuralTokens = new HashSet<String>();
 
-    double total = 0.0;
-    for (Integer count : countsByPosition.values()) {
-        total += count;
-    }
-    if (total <= 0.0) {
-        return 0.0;
-    }
-
-    double entropy = 0.0;
-    for (Integer count : countsByPosition.values()) {
-        if (count == null || count <= 0) continue;
-        double p = count / total;
-        entropy -= p * log2(p);
-    }
-
-    double maxEntropy = log2(countsByPosition.size());
-    if (maxEntropy <= 0.0) {
-        return 0.0;
-    }
-    return entropy / maxEntropy;
-}
-
-private double log2(double value) {
-    return Math.log(value) / Math.log(2.0);
-}
-
-/**
- * Computes a batch-adaptive score threshold using the median ensemble score.
- * The threshold is upper-bounded by MAX_SENSITIVITY to preserve existing behavior
- * and lower-bounded by MIN_ADAPTIVE_THRESHOLD to avoid selecting near-zero scores.
- *
- * @param scores ranked candidate scores for the current sequence batch
- * @return adaptive threshold for content selection
- */
-private double computeAdaptiveThreshold(List<Score> scores) {
-    if (scores == null || scores.isEmpty()) {
-        return MAX_SENSITIVITY;
-    }
-
-    List<Double> values = new ArrayList<Double>();
-    for (Score s : scores) {
-        values.add(s.score);
-    }
-    Collections.sort(values);
-
-    double median;
-    int size = values.size();
-    if (size % 2 == 0) {
-        int upper = size / 2;
-        int lower = upper - 1;
-        median = (values.get(lower) + values.get(upper)) / 2.0;
-    } else {
-        median = values.get(size / 2);
-    }
-    double adaptive = Math.min(MAX_SENSITIVITY, median);
-    return Math.max(MIN_ADAPTIVE_THRESHOLD, adaptive);
-}
-
-/**
- * SIMPLE FIX: Only detect obvious swap structural tokens Words that DON'T move while other
- * tokens swap around them
- */
-private Set<String> detectSwapStructuralWords(
-    Map<String, Set<Integer>> positions, Set<String> all, List<List<String>> sequences) {
-    Set<String> structuralWords = new HashSet<String>();
-
-    // Only detect swaps when we have exactly 2 sequences of same length
     if (sequences.size() != 2 || sequences.get(0).size() != sequences.get(1).size()) {
-        return structuralWords;
+        return structuralTokens;
     }
 
-    // Check if this is a clear swap pattern:
-    // - Exactly 2 tokens have 2 poss each (they swap)
-    // - Remaining tokens have 1 pos each (they're fixed)
-    int swappingWords = 0;
-    int fixedWords = 0;
+    int swappingTokens = 0;
+    int fixedTokens = 0;
 
     for (String token : all) {
         Set<Integer> poss = positions.get(token);
         if (poss != null) {
             if (poss.size() == 2) {
-                swappingWords++;
+                swappingTokens++;
             } else if (poss.size() == 1) {
-                fixedWords++;
+                fixedTokens++;
             }
         }
     }
 
-    // Only apply swap detection if we have exactly 2 swapping tokens and at least 1 fixed token
-    if (swappingWords == 2 && fixedWords >= 1) {
+    if (swappingTokens == 2 && fixedTokens >= 1) {
         for (String token : all) {
             Set<Integer> poss = positions.get(token);
             if (poss != null && poss.size() == 1) {
-                structuralWords.add(token); // Fixed tokens in swap pattern are structural
+                structuralTokens.add(token);
             }
         }
     }
 
-    return structuralWords;
-}
+    return structuralTokens;
+  }
 
-  public Set<String> runParityFallback(List<List<String>> sequences) {
+  /**
+   * Selects the two terms for the core relation.
+   * Prioritizes self-relation when a token appears in multiple operand positions.
+   */
+  public String[] selectTermsByClosestCompanion(
+      Set<String> contentTokens,
+      List<List<String>> sequences,
+      Map<String, Set<Integer>> tokenPositions,
+      Set<String> structuralTokens) {
+    
+    if (contentTokens == null || contentTokens.isEmpty()) {
+      return null;
+    }
+    
+    // Step 1: Filter out tokens that are definitely structural
+    Set<String> candidateTokens = new HashSet<String>(contentTokens);
+    candidateTokens.removeAll(structuralTokens);
+    candidateTokens.removeAll(optionalFinder.get());
+    
+    if (candidateTokens.isEmpty()) {
+      candidateTokens = new HashSet<String>(contentTokens);
+    }
+    
+    // Step 2: Check for self-relation candidates (tokens that appear multiple times in same sequence)
+    String selfRelationToken = findSelfRelationCandidate(sequences, candidateTokens);
+    
+    if (selfRelationToken != null) {
+      return new String[] {selfRelationToken, selfRelationToken};
+    }
+    
+    // Step 3: Try to find two distinct tokens
+    if (candidateTokens.size() >= 2) {
+      List<String> tokenList = new ArrayList<String>(candidateTokens);
+      Collections.sort(tokenList);
+      
+      // Prefer tokens that appear in both sequences as content
+      String first = selectBestToken(tokenList, sequences);
+      String second = selectBestTokenDifferent(tokenList, first, sequences);
+      
+      if (second != null) {
+        return new String[] {first, second};
+      }
+      
+      return new String[] {tokenList.get(0), tokenList.get(1)};
+    }
+    
+    // Step 4: Single token fallback - use self-relation
+    if (candidateTokens.size() == 1) {
+      String token = candidateTokens.iterator().next();
+      return new String[] {token, token};
+    }
+    
+    return null;
+  }
+
+  /**
+   * Finds a token that appears multiple times in the same sequence,
+   * indicating it fills both operand slots (self-relation).
+   */
+  private String findSelfRelationCandidate(List<List<String>> sequences, Set<String> candidateTokens) {
+    for (List<String> sequence : sequences) {
+      Map<String, Integer> tokenCount = new HashMap<String, Integer>();
+      for (String token : sequence) {
+        if (candidateTokens.contains(token)) {
+          Integer count = tokenCount.get(token);
+          tokenCount.put(token, (count == null) ? 1 : count + 1);
+        }
+      }
+      
+      for (Map.Entry<String, Integer> entry : tokenCount.entrySet()) {
+        // If a token appears more than once in the same sequence, it's a self-relation candidate
+        if (entry.getValue() >= 2) {
+          return entry.getKey();
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Selects the best token from the list (most frequent, appears in both sequences, etc.)
+   */
+  private String selectBestToken(List<String> tokens, List<List<String>> sequences) {
+    if (tokens.isEmpty()) return null;
+    
+    // Score tokens based on how many sequences they appear in
+    Map<String, Integer> sequenceCount = new HashMap<String, Integer>();
+    for (String token : tokens) {
+      int count = 0;
+      for (List<String> seq : sequences) {
+        if (seq.contains(token)) {
+          count++;
+        }
+      }
+      sequenceCount.put(token, count);
+    }
+    
+    // Find token with highest sequence count
+    String best = tokens.get(0);
+    int bestScore = sequenceCount.get(best);
+    for (String token : tokens) {
+      int score = sequenceCount.get(token);
+      if (score > bestScore) {
+        bestScore = score;
+        best = token;
+      }
+    }
+    
+    return best;
+  }
+
+  /**
+   * Selects a token different from the first token.
+   */
+  private String selectBestTokenDifferent(List<String> tokens, String first, List<List<String>> sequences) {
+    List<String> remaining = new ArrayList<String>(tokens);
+    remaining.remove(first);
+    
+    if (remaining.isEmpty()) {
+      return null;
+    }
+    
+    return selectBestToken(remaining, sequences);
+  }
+
+  /**
+   * Parity analysis - tokens that appear more often in even positions
+   */
+  public Set<String> parify(List<List<String>> sequences) {
     if (sequences == null || sequences.isEmpty()) {
       return new HashSet<String>();
     }
+    
     Map<String, Integer> oddCount = new HashMap<String, Integer>();
     Map<String, Integer> evenCount = new HashMap<String, Integer>();
     Set<String> allInSequences = new HashSet<String>();
@@ -373,7 +355,7 @@ private Set<String> detectSwapStructuralWords(
       }
     }
 
-    allInSequences.removeAll(optionalFinder.getOptionals());
+    allInSequences.removeAll(optionalFinder.get());
 
     Set<String> contents = new LinkedHashSet<String>();
     for (String token : allInSequences) {
@@ -396,14 +378,9 @@ private Set<String> detectSwapStructuralWords(
   }
 
   /**
-   * Simple "Any Movement Check" - identifies content tokens based on ANY posal changes. This
-   * catches cases where tokens swap or reorder without structural changes.
-   *
-   * @param sequences The equivalent sequences to analyze
-   * @param learnedStructurals Previously identified structural tokens to downweight
-   * @return Set of content tokens identified by posal movement
+   * Simple "Any Movement Check" - identifies content tokens based on ANY position changes.
    */
-  public Set<String> runAnyMovementCheck(
+  public Set<String> checkMovement(
       List<List<String>> sequences, Set<String> learnedStructurals) {
     if (sequences == null || sequences.isEmpty()) {
       return new HashSet<String>();
@@ -412,7 +389,6 @@ private Set<String> detectSwapStructuralWords(
     Map<String, Set<Integer>> positions = new HashMap<String, Set<Integer>>();
     Set<String> all = new HashSet<String>();
 
-    // Collect all token poss across sequences
     for (List<String> sequence : sequences) {
       all.addAll(sequence);
       for (int i = 0; i < sequence.size(); i++) {
@@ -424,8 +400,7 @@ private Set<String> detectSwapStructuralWords(
       }
     }
 
-    // Remove optional tokens from consideration
-    all.removeAll(optionalFinder.getOptionals());
+    all.removeAll(optionalFinder.get());
 
     if (all.isEmpty()) {
       return new HashSet<String>();
@@ -433,21 +408,17 @@ private Set<String> detectSwapStructuralWords(
 
     Set<String> contents = new LinkedHashSet<String>();
 
-    // Core logic: ANY token that appears in multiple poss = content
     for (String token : all) {
       Set<Integer> poss = positions.get(token);
       if (poss != null && poss.size() > 1) {
-        // This token MOVED = it's content
         contents.add(token);
       }
     }
 
-    // Apply structural knowledge filter if available
     if (learnedStructurals != null) {
       contents.removeAll(learnedStructurals);
     }
 
-    // Respect the maximum content tokens limit
     if (contents.size() > CONCEPT_LIMIT) {
       return new HashSet<String>();
     }

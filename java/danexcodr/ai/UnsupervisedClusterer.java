@@ -1,8 +1,9 @@
 package danexcodr.ai;
 
-import java.util.*;
-import danexcodr.ai.core.SymbolManager;
 import danexcodr.ai.core.Symbol;
+import danexcodr.ai.core.SymbolManager;
+import static danexcodr.ai.Config.*;
+import java.util.*;
 
 /**
  * Implements the "mental" unsupervised clustering logic with Short-Term Memory Persistence.
@@ -32,17 +33,17 @@ public class UnsupervisedClusterer {
 
         double getSalience(SymbolManager symbolManager) {
             double totalFrequency = 0.0;
-            Set<String> uniqueWords = new HashSet<String>();
+            Set<String> uniqueTokens = new HashSet<String>();
             
             for (List<String> seq : cluster) {
                 for(String w : seq) {
-                    uniqueWords.add(symbolManager.getCanonical(w));
+                    uniqueTokens.add(symbolManager.getCanonical(w));
                 }
             }
             
-            for (String word : uniqueWords) {
-                if (symbolManager.getSymbols().containsKey(word)) {
-                    Symbol s = symbolManager.getSymbols().get(word);
+            for (String token : uniqueTokens) {
+                if (symbolManager.getSymbols().containsKey(token)) {
+                    Symbol s = symbolManager.getSymbols().get(token);
                     totalFrequency += s.frequency;
                 }
             }
@@ -93,8 +94,8 @@ public class UnsupervisedClusterer {
 
     private String createSignature(List<String> sentence, SymbolManager symbolManager) {
         List<String> canonical = new ArrayList<String>(sentence.size());
-        for (String word : sentence) {
-            canonical.add(symbolManager.getCanonical(word));
+        for (String token : sentence) {
+            canonical.add(symbolManager.getCanonical(token));
         }
         Collections.sort(canonical);
         return canonical.toString();
@@ -102,8 +103,8 @@ public class UnsupervisedClusterer {
 
     public void testAndAddSentence(List<String> newSentence, String originalLine) {
         // Ensure symbols exist
-        for (String word : newSentence) {
-            ai.getSymbolManager().ensureSymbolExists(word);
+        for (String token : newSentence) {
+            ai.getSymbolManager().ensureSymbolExists(token);
         }
         
         String signature = createSignature(newSentence, ai.getSymbolManager());
@@ -124,8 +125,8 @@ public class UnsupervisedClusterer {
         }
         
         Set<String> newSentenceSet = new HashSet<String>();
-        for(String word : newSentence) {
-            newSentenceSet.add(ai.getSymbolManager().getCanonical(word));
+        for(String token : newSentence) {
+            newSentenceSet.add(ai.getSymbolManager().getCanonical(token));
         }
         
         MemoryTrace bestMatch = null;
@@ -140,7 +141,7 @@ public class UnsupervisedClusterer {
                 existingSentenceSet.add(ai.getSymbolManager().getCanonical(w));
             }
             
-            int difference = getWordDifference(newSentenceSet, existingSentenceSet);
+            int difference = getTokenDifference(newSentenceSet, existingSentenceSet);
             
             if (difference < 2 && difference < bestDifference) {
                 bestDifference = difference;
@@ -162,7 +163,7 @@ public class UnsupervisedClusterer {
         signatureToTrace.put(signature, newTrace);
     }
     
-    private int getWordDifference(Set<String> set1, Set<String> set2) {
+    private int getTokenDifference(Set<String> set1, Set<String> set2) {
         if (set1 == set2) return 0;
         
         int diff = 0;
@@ -231,7 +232,6 @@ public class UnsupervisedClusterer {
     }
 
     private void performGarbageCollection() {
-        double FORGETTING_THRESHOLD = 0.5;
 
         Iterator<MemoryTrace> it = memoryTraces.iterator();
         while (it.hasNext()) {

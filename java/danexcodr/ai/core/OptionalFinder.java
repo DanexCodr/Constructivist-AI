@@ -9,64 +9,61 @@ import java.util.Set;
 
 public class OptionalFinder {
 
-private Set<String> optionals = new HashSet<String>(); // Session-specific
+  private Set<String> optionals = new HashSet<String>(); // Session-specific
 
-public Set<String> getOptionals() {
+  public Set<String> get() {
     return optionals;
-}
+  }
 
-// ADD THIS METHOD:
-public void clearOptionals() {
+  public void clear() {
     optionals.clear();
-}
+  }
 
-        public void preprocessAndIdentifyOptionals(List<List<String>> sequences) {
-    
+  public void analyze(List<List<String>> sequences) {
+
     if (sequences == null || sequences.size() < 2) {
-        return;
+      return;
     }
-    
+
     // Clear existing optionals at the start
     optionals.clear();
-    
+
     List<List<String>> sortedSequences = new ArrayList<List<String>>(sequences);
-    Collections.sort(sortedSequences, new Comparator<List<String>>() {
-        @Override
-        public int compare(List<String> o1, List<String> o2) {
+    Collections.sort(
+        sortedSequences,
+        new Comparator<List<String>>() {
+          @Override
+          public int compare(List<String> o1, List<String> o2) {
             return Integer.valueOf(o1.size()).compareTo(o2.size());
-        }
-    });
-    
+          }
+        });
 
     for (int i = 0; i < sortedSequences.size(); i++) {
-        for (int j = i + 1; j < sortedSequences.size(); j++) {
-            List<String> shorter = sortedSequences.get(i);
-            List<String> longer = sortedSequences.get(j);
-            
-            
+      for (int j = i + 1; j < sortedSequences.size(); j++) {
+        List<String> shorter = sortedSequences.get(i);
+        List<String> longer = sortedSequences.get(j);
 
-            if (longer.size() == shorter.size() + 1) {
-                String optionalWord = findOptionalWord(shorter, longer);
-                if (optionalWord != null) {
-                    optionals.add(optionalWord);
-                }
-            }
+        if (longer.size() == shorter.size() + 1) {
+          String optionalToken = find(shorter, longer);
+          if (optionalToken != null) {
+            optionals.add(optionalToken);
+          }
         }
+      }
     }
-    
+  }
+
+  private String find(List<String> shorter, List<String> longer) {
+    if (shorter == null || longer == null || shorter.size() != longer.size() - 1) {
+      return null;
+    }
+    for (int i = 0; i < longer.size(); i++) {
+      List<String> tempLonger = new ArrayList<String>(longer);
+      String removedToken = tempLonger.remove(i);
+      if (tempLonger.equals(shorter)) {
+        return removedToken;
+      }
+    }
+    return null;
+  }
 }
-
-        private String findOptionalWord(List<String> shorter, List<String> longer) {
-            if (shorter == null || longer == null || shorter.size() != longer.size() - 1) {
-                return null;
-            }
-            for (int i = 0; i < longer.size(); i++) {
-                List<String> tempLonger = new ArrayList<String>(longer);
-                String removedWord = tempLonger.remove(i);
-                if (tempLonger.equals(shorter)) {
-                    return removedWord;
-                }
-            }
-            return null;
-        }
-    }

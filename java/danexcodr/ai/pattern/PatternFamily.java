@@ -1,19 +1,18 @@
 package danexcodr.ai.pattern;
 
+import danexcodr.ai.core.SlotFlag;
+
 import java.util.*;
 import java.util.Map.Entry;
-import danexcodr.ai.time.Timestamp;
 
 public class PatternFamily extends Abstract {
     private Map<String, Set<String>> aliases = new LinkedHashMap<String, Set<String>>();
-    private Map<String, String> wordToAlias = new HashMap<String, String>();
+    private Map<String, String> tokenToAlias = new HashMap<String, String>();
     private Set<Structure> memberPatterns = new HashSet<Structure>();
-    private Set<List<String>> aliasedBasePatterns = new HashSet<List<String>>();
+    private Set<Data> aliasedBasePatterns = new HashSet<Data>();
     
     private long createdAt;
     private long lastModifiedAt;
-    
-    // NEW: Store which relation patterns belong to this family
     private Set<String> relationPatternIds = new HashSet<String>();
     
     public PatternFamily(String id) {
@@ -41,31 +40,31 @@ public class PatternFamily extends Abstract {
         return lastModifiedAt; 
     }
     
-    public void buildAliases(Set<String> familyWords, Map<String, Set<String>> structuralEquivalents) {
-        Set<String> processedWords = new HashSet<String>();
+    public void buildAliases(Set<String> familyTokens, Map<String, Set<String>> structuralEquivalents) {
+        Set<String> processedTokens = new HashSet<String>();
         int aliasCount = 0;
         
-        List<String> sortedFamilyWords = new ArrayList<String>(familyWords);
-        Collections.sort(sortedFamilyWords);
+        List<String> sortedFamilyTokens = new ArrayList<String>(familyTokens);
+        Collections.sort(sortedFamilyTokens);
         
-        for (String word : sortedFamilyWords) {
-            if (word.startsWith("PF")) continue;
+        for (String token : sortedFamilyTokens) {
+            if (token.startsWith("PF")) continue;
 
-            if (processedWords.contains(word)) continue;
+            if (processedTokens.contains(token)) continue;
             
             String alias = "[S" + aliasCount++ + "]";
             Set<String> equivalentSet = new HashSet<String>();
-            if (structuralEquivalents.containsKey(word)) {
-                 equivalentSet.addAll(structuralEquivalents.get(word));
+            if (structuralEquivalents.containsKey(token)) {
+                 equivalentSet.addAll(structuralEquivalents.get(token));
             }
-            equivalentSet.add(word);
+            equivalentSet.add(token);
 
             aliases.put(alias, equivalentSet);
             
-            for (String eqWord : equivalentSet) {
-                if (familyWords.contains(eqWord)) {
-                    wordToAlias.put(eqWord, alias);
-                    processedWords.add(eqWord);
+            for (String eqToken : equivalentSet) {
+                if (familyTokens.contains(eqToken)) {
+                    tokenToAlias.put(eqToken, alias);
+                    processedTokens.add(eqToken);
                 }
             }
         }
@@ -73,49 +72,41 @@ public class PatternFamily extends Abstract {
     }
 
     public void updateAliases(Map<String, Set<String>> structuralEquivalents) {
-        Set<String> familyWords = new HashSet<String>();
+        Set<String> familyTokens = new HashSet<String>();
         
-        for (Set<String> words : aliases.values()) {
-            if (words != null) {
-                familyWords.addAll(words);
+        for (Set<String> tokens : aliases.values()) {
+            if (tokens != null) {
+                familyTokens.addAll(tokens);
             }
         }
         
-        familyWords.addAll(wordToAlias.keySet());
+        familyTokens.addAll(tokenToAlias.keySet());
         
         for (Structure sp : memberPatterns) {
-            for (String token : sp.getStructuralSlots()) {
-                if (!token.equals("[1]") && !token.equals("[2]") && 
-                    !token.equals("[C]") && !token.equals("[X]") && 
-                    !token.startsWith("PF")) {
-                    familyWords.add(token);
+            Data data = sp.getData();
+            for (int i = 0; i < data.size(); i++) {
+                if (data.isToken(i)) {
+                    familyTokens.add(data.getTokenAt(i));
+                } else if (data.isAlias(i)) {
+                    familyTokens.add(data.getAliasAt(i));
                 }
             }
         }
         
-        buildAliases(familyWords, structuralEquivalents);
+        buildAliases(familyTokens, structuralEquivalents);
     }
 
-    // NEW: Add patterns and merge duplicates
     public void addAndMergePatterns(List<Structure> newPatterns) {
         boolean updated = false;
         
         for (Structure newPattern : newPatterns) {
-            // Check if pattern already exists
             if (!containsEquivalentPattern(newPattern)) {
                 addPattern(newPattern);
                 updated = true;
             } else {
-                // Update frequency if pattern exists
                 Structure existing = findEquivalentPattern(newPattern);
                 if (existing != null) {
                     existing.setFrequency(existing.getFrequency() + 1);
-                    
-                    // Also add concrete examples from new pattern
-                    for (List<String> example : newPattern.getConcreteExamples()) {
-                        existing.addConcreteExample(example);
-                    }
-                    
                     updated = true;
                 }
             }
@@ -150,62 +141,78 @@ public class PatternFamily extends Abstract {
             return false;
         }
         
-        List<String> slots1 = p1.getStructuralSlots();
-        List<String> slots2 = p2.getStructuralSlots();
+        Data data1 = p1.getData();
+        Data data2 = p2.getData();
         
-        if (slots1.size() != slots2.size()) {
+        if (data1.size() != data2.size()) {
             return false;
         }
         
-        for (int i = 0; i < slots1.size(); i++) {
-            String s1 = slots1.get(i);
-            String s2 = slots2.get(i);
+        for (int i = 0; i < data1.size(); i++) {
+            if (data1.isPlaceholder(i) != data2.isPlaceholder(i)) return false;
+            if (data1.isToken(i) != data2.isToken(i)) return false;
+            if (data1.isPFToken(i) != data2.isPFToken(i)) return false;
+            if (data1.isAlias(i) != data2.isAlias(i)) return false;
             
-            if (!s1.equals(s2)) {
-                return false;
-            }
+            if (data1.isToken(i) && !data1.getTokenAt(i).equals(data2.getTokenAt(i))) return false;
+            if (data1.isPFToken(i) && !data1.getPFTokenAt(i).equals(data2.getPFTokenAt(i))) return false;
+            if (data1.isAlias(i) && !data1.getAliasAt(i).equals(data2.getAliasAt(i))) return false;
+            if (data1.isPlaceholder(i) && data1.getPlaceholderAt(i) != data2.getPlaceholderAt(i)) return false;
         }
         
         return true;
     }
 
-    // Add pattern to family
     public void addPattern(Structure sp) {
         if (memberPatterns.add(sp)) {
             this.frequency += 1;
             
-            List<String> aliased = new ArrayList<String>();
-            for (String token : sp.getStructuralSlots()) {
-                if (wordToAlias.containsKey(token)) {
-                    aliased.add(wordToAlias.get(token));
-                } else {
-                    aliased.add(token);
-                }
-            }
+            Data aliased = getAliasedData(sp);
             aliasedBasePatterns.add(aliased);
-            
-            // Add concrete examples from the pattern
-            for (List<String> example : sp.getConcreteExamples()) {
-                addConcreteExample(example);
-            }
             
             updateTimestamp();
         }
     }
     
-    // NEW: Add relation pattern to this family
+    public Data getAliasedData(Structure sp) {
+        Data data = sp.getData();
+        Data aliased = new Data();
+        
+        for (int i = 0; i < data.size(); i++) {
+            if (data.isPlaceholder(i)) {
+                aliased.addPlaceholder(data.getPlaceholderAt(i));
+            } else if (data.isPFToken(i)) {
+                aliased.addPFToken(data.getPFTokenAt(i));
+            } else if (data.isToken(i)) {
+                String token = data.getTokenAt(i);
+                if (tokenToAlias.containsKey(token)) {
+                    aliased.addAlias(tokenToAlias.get(token));
+                } else {
+                    aliased.addToken(token);
+                }
+            } else if (data.isAlias(i)) {
+                String alias = data.getAliasAt(i);
+                if (tokenToAlias.containsKey(alias)) {
+                    aliased.addAlias(tokenToAlias.get(alias));
+                } else {
+                    aliased.addAlias(alias);
+                }
+            }
+        }
+        
+        return aliased;
+    }
+    
     public void addRelationPattern(String relationPatternId) {
         if (relationPatternIds.add(relationPatternId)) {
             updateTimestamp();
         }
     }
     
-    // NEW: Get all relation patterns in this family
     public Set<String> getRelationPatternIds() {
         return new HashSet<String>(relationPatternIds);
     }
     
-    @Override
     public boolean matchesSequence(List<String> sequence) {
         for (Structure pattern : memberPatterns) {
             if (pattern.matchesSequence(sequence)) {
@@ -215,28 +222,26 @@ public class PatternFamily extends Abstract {
         return false;
     }
     
-    // NEW: Check if this family can generate sequence for given terms
     public boolean canGenerateFor(String term1, String term2, boolean requireCommutative) {
         for (Structure sp : memberPatterns) {
             if (requireCommutative && !sp.isCommutative()) {
                 continue;
             }
             
-            // Check if pattern has slots that can accept our terms
-            List<String> slots = sp.getStructuralSlots();
+            Data data = sp.getData();
             boolean hasTerm1Slot = false;
             boolean hasTerm2Slot = false;
             
-            for (String slot : slots) {
-                if (slot.equals("[1]") || slot.equals("[2]") || slot.equals("[C]") || slot.equals("[X]")) {
-                    if (slot.equals("[1]") || slot.equals("[C]")) {
+            for (int i = 0; i < data.size(); i++) {
+                if (data.isPlaceholder(i)) {
+                    SlotFlag flag = data.getPlaceholderAt(i);
+                    if (flag == SlotFlag._1 || flag == SlotFlag._C) {
                         hasTerm1Slot = true;
                     }
-                    if (slot.equals("[2]") || slot.equals("[C]")) {
+                    if (flag == SlotFlag._2 || flag == SlotFlag._C) {
                         hasTerm2Slot = true;
                     }
-                    if (slot.equals("[X]")) {
-                        // [X] can be either term
+                    if (flag == SlotFlag._X) {
                         hasTerm1Slot = hasTerm2Slot = true;
                     }
                 }
@@ -249,173 +254,32 @@ public class PatternFamily extends Abstract {
         return false;
     }
     
-    // NEW: Rebuild aliased base patterns after merging
     private void rebuildAliasedBasePatterns() {
         aliasedBasePatterns.clear();
         for (Structure sp : memberPatterns) {
-            List<String> aliased = new ArrayList<String>();
-            for (String token : sp.getStructuralSlots()) {
-                if (wordToAlias.containsKey(token)) {
-                    aliased.add(wordToAlias.get(token));
-                } else {
-                    aliased.add(token);
-                }
-            }
-            aliasedBasePatterns.add(aliased);
+            aliasedBasePatterns.add(getAliasedData(sp));
         }
     }
     
-    public List<String> getMergedPatterns() {
-        List<List<String>> currentPatterns = new ArrayList<List<String>>(aliasedBasePatterns);
-        
-        boolean mergeOccurred = true;
-        while (mergeOccurred) {
-            mergeOccurred = false;
-            List<List<String>> nextPatterns = new ArrayList<List<String>>();
-            Set<Integer> mergedIndices = new HashSet<Integer>();
-            
-            Collections.sort(currentPatterns, new Comparator<List<String>>() {
-                @Override
-                public int compare(List<String> o1, List<String> o2) {
-                    int lenCompare = Integer.compare(o1.size(), o2.size());
-                    if (lenCompare != 0) return lenCompare;
-                    return o1.toString().compareTo(o2.toString());
-                }
-            });
-
-            for (int i = 0; i < currentPatterns.size(); i++) {
-                if (mergedIndices.contains(i)) continue;
-                
-                List<String> basePattern = new ArrayList<String>(currentPatterns.get(i));
-                
-                for (int j = i + 1; j < currentPatterns.size(); j++) {
-                    if (mergedIndices.contains(j)) continue;
-                    
-                    List<String> p2 = currentPatterns.get(j);
-                    List<String> merged = tryMerge(basePattern, p2);
-                    
-                    if (merged != null) {
-                        basePattern = merged;
-                        mergedIndices.add(j);
-                        mergeOccurred = true;
-                    }
-                }
-                
-                nextPatterns.add(basePattern);
-                mergedIndices.add(i);
-            }
-            
-            currentPatterns = nextPatterns;
-        }
-        
-        List<String> finalPatterns = new ArrayList<String>();
-        for (List<String> finalPattern : currentPatterns) {
-            finalPatterns.add(formatPattern(finalPattern));
-        }
-
-        return finalPatterns;
+    public Data getAliasedSlots(Structure sp) {
+        return getAliasedData(sp);
     }
     
-    public List<String> getAliasedSlots(Structure sp) {
-        List<String> aliased = new ArrayList<String>();
-        for (String token : sp.getStructuralSlots()) {
-            if (wordToAlias.containsKey(token)) {
-                aliased.add(wordToAlias.get(token));
-            } else {
-                aliased.add(token);
-            }
-        }
-        return aliased;
-    }
-    
-    private List<String> tryMerge(List<String> p1, List<String> p2) {
-        List<String> merged = attemptInsertionMerge(p1, p2);
-        if (merged != null) return merged;
-        
-        merged = attemptInsertionMerge(p2, p1);
-        if (merged != null) return merged;
-
-        return null;
-    }
-    
-    private List<String> attemptInsertionMerge(List<String> shorter, List<String> longer) {
-        if (shorter.size() != longer.size() - 1 || shorter.equals(longer)) {
-            return null;
-        }
-
-        for (int i = 0; i < longer.size(); i++) {
-            List<String> temp = new ArrayList<String>(longer);
-            String removed = temp.remove(i);
-            
-            if (temp.equals(shorter)) {
-                if (removed.equals("[C]") || 
-                    removed.equals("[1]") || 
-                    removed.equals("[2]") || 
-                    removed.equals("[X]") ||
-                    removed.startsWith("PF")) {
-                    return null;
-                }
-                
-                boolean appearsInAll = true;
-                for (Structure member : this.memberPatterns) {
-                    boolean found = false;
-                    for (String memberToken : member.getStructuralSlots()) {
-                        if (memberToken.equals(removed)) {
-                            found = true;
-                            break;
-                        }
-                        // Check if memberToken has an alias that matches removed's alias
-                        String memberAlias = wordToAlias.get(memberToken);
-                        String removedAlias = wordToAlias.get(removed);
-                        if (memberAlias != null && removedAlias != null && 
-                            memberAlias.equals(removedAlias)) {
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found) {
-                        appearsInAll = false;
-                        break;
-                    }
-                }
-                
-                if (appearsInAll) {
-                    return null; // Word appears in all patterns, not optional
-                }
-                
-                List<String> mergedPattern = new ArrayList<String>(longer);
-                mergedPattern.set(i, removed + "?");
-                return mergedPattern;
-            }
-        }
-        return null;
-    }
-
-    private String formatPattern(List<String> pattern) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < pattern.size(); i++) {
-            String token = pattern.get(i);
-            
-            if (token.startsWith("PF")) {
-                sb.append("[").append(token).append("]");
-            } else {
-                sb.append(token);
-            }
-            
-            if (i < pattern.size() - 1) {
-                sb.append(", ");
-            }
-        }
-        return sb.toString();
-    }
-
     public Map<String, Set<String>> getAliases() { 
         return aliases; 
     }
     
-    public Map<String, String> getWordToAlias() { return wordToAlias; }
-    public Set<Structure> getMemberPatterns() { return memberPatterns; }
-    public Set<List<String>> getAliasedBasePatterns() { return aliasedBasePatterns; }
+    public Map<String, String> getTokenToAlias() { 
+        return tokenToAlias; 
+    }
+    
+    public Set<Structure> getMemberPatterns() { 
+        return memberPatterns; 
+    }
+    
+    public Set<Data> getAliasedBasePatterns() { 
+        return aliasedBasePatterns; 
+    }
     
     @Override
     public String toString() {
@@ -427,9 +291,21 @@ public class PatternFamily extends Abstract {
             sb.append(String.format(" %-2s | %s\n", aliasEntry.getKey(), aliasEntry.getValue()));
         }
         
-        List<String> merged = getMergedPatterns();
-        for (String patternLine : merged) {
-            sb.append("     ").append(patternLine).append("\n");
+        for (Data data : aliasedBasePatterns) {
+            sb.append("     ");
+            for (int i = 0; i < data.size(); i++) {
+                if (i > 0) sb.append(", ");
+                if (data.isPlaceholder(i)) {
+                    sb.append(data.getPlaceholderAt(i).toToken());
+                } else if (data.isToken(i)) {
+                    sb.append(data.getTokenAt(i));
+                } else if (data.isPFToken(i)) {
+                    sb.append("[").append(data.getPFTokenAt(i)).append("]");
+                } else if (data.isAlias(i)) {
+                    sb.append(data.getAliasAt(i));
+                }
+            }
+            sb.append("\n");
         }
 
         sb.append("    Total frequency: ").append(frequency).append("\n");
